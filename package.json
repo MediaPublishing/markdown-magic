@@ -1,0 +1,41 @@
+{
+  "name": "markdown-magic",
+  "productName": "Markdown Magic",
+  "version": "0.1.4",
+  "description": "A local macOS Markdown workspace with WYSIWYG editing and grouped tabs.",
+  "author": "MediaPublishing",
+  "private": true,
+  "main": "dist-electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --port 5173 --strictPort\" \"wait-on tcp:5173 && cross-env ELECTRON_RENDERER_URL=http://localhost:5173 electron .\"",
+    "build:electron": "esbuild src/main/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && esbuild src/preload/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs",
+    "build:renderer": "vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
+    "start": "npm run build && electron .",
+    "test": "vitest run",
+    "test:e2e": "npm run build:renderer && npm run build:electron && playwright test",
+    "quality": "npm run typecheck && npm run test && npm run test:e2e",
+    "screenshots:marketing": "npm run build:renderer && npm run build:electron && playwright test tests/marketing-screenshots.spec.ts",
+    "deploy:pages": "wrangler pages deploy site --project-name markdown-magic --branch main",
+    "package:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg",
+    "package:mac:app": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir"
+  },
+  "devDependencies": {
+    "@milkdown/crepe": "^7.22.1",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.10.1",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "lucide-static": "^1.33.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "wait-on": "^9.0.3"
+  }
+}

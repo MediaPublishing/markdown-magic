@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Markdown Magic">
+  <rect x="72" y="72" width="880" height="880" rx="190" fill="#0A66FF"/>
+  <path d="M368 344 206 512l162 168" fill="none" stroke="#fff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m656 344 162 168-162 168" fill="none" stroke="#fff" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M512 320c18 104 76 164 176 192-100 28-158 88-176 192-18-104-76-164-176-192 100-28 158-88 176-192Z" fill="#fff"/>
+</svg>

@@ -1,0 +1,13 @@
+node_modules/
+dist-electron/
+dist-renderer/
+release/
+build/icon.iconset/
+test-results/
+*.log
+.DS_Store
+.env
+.env.*
+receipts/
+private/
+site-preview/

@@ -1,0 +1,54 @@
+appId: com.mediapublishing.markdown-magic
+productName: Markdown Magic
+directories:
+  output: release
+files:
+  - dist-electron/**/*
+  - dist-renderer/**/*
+  - package.json
+asar: true
+electronDist: node_modules/electron/dist
+afterPack: scripts/after-pack.cjs
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: "13.0"
+  hardenedRuntime: true
+  extendInfo:
+    NSAudioCaptureUsageDescription: null
+    NSBluetoothAlwaysUsageDescription: null
+    NSBluetoothPeripheralUsageDescription: null
+    NSCameraUsageDescription: null
+    NSMicrophoneUsageDescription: null
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Markdown Document
+        CFBundleTypeRole: Editor
+        LSHandlerRank: Default
+        CFBundleTypeExtensions:
+          - md
+          - markdown
+          - mdown
+          - mkd
+        LSItemContentTypes:
+          - net.daringfireball.markdown
+          - org.ietf.markdown
+      - CFBundleTypeName: Text Document
+        LSHandlerRank: Alternate
+        CFBundleTypeExtensions:
+          - txt
+          - text
+          - log
+          - csv
+          - tsv
+          - json
+          - yaml
+          - yml
+          - xml
+          - toml
+          - ini
+          - cfg
+          - conf
+        CFBundleTypeRole: Editor
+  target:
+    - dmg
+    - zip
+  identity: null
