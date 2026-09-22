@@ -259,7 +259,8 @@ body.is-resizing-sidebar { cursor: col-resize; user-select: none; }
 .drag-ghost { position: fixed !important; z-index: 100; pointer-events: none; opacity: .94; transform: translate(-50%, -60%) scale(1.03); box-shadow: 0 12px 28px var(--shadow-color); }
 body.is-pointer-dragging { cursor: grabbing; user-select: none; }
 .tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab-close { position: absolute; top: 6px; right: 5px; display: grid; width: 23px; height: 23px; place-items: center; border: 0; border-radius: 5px; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; }
+.tab-close { position: absolute; top: 50%; right: 5px; transform: translateY(-50%); display: grid; width: 23px; height: 23px; padding: 0; place-items: center; border: 0; border-radius: 5px; background: transparent; cursor: pointer; line-height: 1; }
+.tab-close .lucide { display: block; width: 13px; height: 13px; }
 .tab-close:hover, .tab-close:focus-visible { background: var(--hover); }
 .dirty-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); }
 .tab-empty { padding: 5px 7px 10px; color: var(--muted); font-size: 12px; }
