@@ -87,7 +87,7 @@ describe('Main process file boundaries', () => {
     const stats = await fs.stat(filePath);
 
     await expect(writeFileAtomically(filePath, 'stale-editor-state', Math.round(stats.mtimeMs) - 1))
-      .rejects.toThrow('Die Datei wurde ausserhalb geändert.');
+      .rejects.toThrow('Die Datei wurde außerhalb geändert.');
     await expect(fs.readFile(filePath, 'utf8')).resolves.toBe('disk-state');
 
     const freshStats = await fs.stat(filePath);
@@ -163,10 +163,10 @@ describe('Main process file boundaries', () => {
     const store = new WorkspaceStore(statePath);
 
     await fs.writeFile(statePath, JSON.stringify({ version: 1, rootPath: '/workspace', groups: 'bad', tabs: [{}] }), 'utf8');
-    await expect(store.load()).resolves.toEqual({ version: 1, rootPath: '/workspace', groups: [], tabs: [], activeTabId: null });
+    await expect(store.load()).resolves.toEqual({ version: 2, rootPath: '/workspace', groups: [], tabs: [], activeTabId: null });
 
     await fs.writeFile(statePath, '{not json', 'utf8');
-    await expect(store.load()).resolves.toEqual({ version: 1, rootPath: null, groups: [], tabs: [], activeTabId: null });
+    await expect(store.load()).resolves.toEqual({ version: 2, rootPath: null, groups: [], tabs: [], activeTabId: null });
   });
 
   it('lists editable documents recursively while excluding application metadata and dependencies', async () => {
@@ -240,6 +240,7 @@ describe('Preload bridge', () => {
     expect(electron.exposeInMainWorld).toHaveBeenCalledWith('markdownMagic', expect.any(Object));
     const bridge = electron.exposeInMainWorld.mock.calls[0]?.[1] as MarkdownMagicBridge;
     expect(Object.keys(bridge).sort()).toEqual([
+      'createDraft', 'listDrafts', 'discardDraft', 'writeRecovery', 'readRecovery', 'clearRecovery', 'saveDocumentAs', 'importImage', 'readHistory', 'updateDocumentWindow', 'printDocument', 'onBeforeClose', 'getPathForFile', 'setAppLanguage', 'rendererReady',
       'chooseDocument',
       'chooseFolder',
       'completeOnboarding',
@@ -267,7 +268,7 @@ describe('Preload bridge', () => {
       'statFiles',
       'switchToFolder',
       'writeFile',
-    ]);
+    ].sort());
 
     bridge.writeFile('/workspace/draft.md', '# Draft');
     expect(electron.invoke).toHaveBeenCalledWith('files:write', '/workspace/draft.md', '# Draft', undefined);

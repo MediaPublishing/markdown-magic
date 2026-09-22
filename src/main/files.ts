@@ -1,4 +1,7 @@
 import { promises as fs } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import type { FileEntry, FileSystemNode } from '../shared/types';
@@ -15,6 +18,7 @@ const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'release', 
 const MAX_FILES = 5_000;
 const MAX_DEPTH = 12;
 let temporaryFileSequence = 0;
+const executeFile = promisify(execFile);
 
 export async function listMarkdownFiles(rootPath: string): Promise<FileEntry[]> {
   const resolvedRoot = await fs.realpath(rootPath);
@@ -36,12 +40,12 @@ export function isPathInside(rootPath: string, candidatePath: string): boolean {
 
 export class FileConflictError extends Error {
   constructor() {
-    super('Die Datei wurde ausserhalb geändert.');
+    super('Die Datei wurde außerhalb geändert.');
     this.name = 'FileConflictError';
   }
 }
 
-export async function writeFileAtomically(filePath: string, content: string, expectedMtimeMs?: number): Promise<void> {
+export async function writeFileAtomically(filePath: string, content: string, expectedMtimeMs?: number, expectedContentHash?: string): Promise<void> {
   const writeTargetPath = await resolveAtomicWriteTarget(filePath);
   await fs.mkdir(path.dirname(writeTargetPath), { recursive: true });
   const existingStats = await fs.stat(writeTargetPath).catch((error: unknown) => {
@@ -49,16 +53,21 @@ export async function writeFileAtomically(filePath: string, content: string, exp
     if (code === 'ENOENT') return null;
     throw error;
   });
-  if (expectedMtimeMs !== undefined && (await currentMtimeMs(writeTargetPath)) !== expectedMtimeMs) {
+  if ((expectedMtimeMs !== undefined && (await currentMtimeMs(writeTargetPath)) !== expectedMtimeMs) || (expectedContentHash !== undefined && createHash('sha256').update(await fs.readFile(writeTargetPath)).digest('hex') !== expectedContentHash)) {
     throw new FileConflictError();
   }
   const temporaryPath = createTemporaryPath(writeTargetPath);
   try {
-    await fs.writeFile(temporaryPath, content, {
-      encoding: 'utf8',
-      mode: existingStats?.mode,
-    });
-    if (expectedMtimeMs !== undefined && (await currentMtimeMs(writeTargetPath)) !== expectedMtimeMs) {
+    const handle = await fs.open(temporaryPath, 'wx', existingStats?.mode ?? 0o600);
+    try {
+      // macOS cp -p preserves Finder tags, extended attributes and ACLs; Node copyFile does not.
+      // Reserve the temporary file exclusively before copying and keep its descriptor open.
+      if (existingStats && process.platform === 'darwin') await executeFile('/bin/cp', ['-p', writeTargetPath, temporaryPath]);
+      await handle.truncate(0);
+      await handle.writeFile(content, 'utf8');
+      await handle.sync();
+    } finally { await handle.close(); }
+    if ((expectedMtimeMs !== undefined && (await currentMtimeMs(writeTargetPath)) !== expectedMtimeMs) || (expectedContentHash !== undefined && createHash('sha256').update(await fs.readFile(writeTargetPath)).digest('hex') !== expectedContentHash)) {
       throw new FileConflictError();
     }
     await fs.rename(temporaryPath, writeTargetPath);

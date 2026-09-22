@@ -49,10 +49,13 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   await expect(brandMark).toBeVisible();
   await expect.poll(() => brandMark.evaluate((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth >= 1024)).toBe(true);
 
+  await openPlaces(firstWindow);
   await firstWindow.locator('.file-item', { hasText: 'alpha.md' }).click();
   await expect(firstWindow.locator('.tree-root .file-item')).toHaveCount(3);
   await expect(firstWindow.locator('.tab')).toHaveCount(1);
-  await expect(firstWindow.locator('.document-title')).toHaveText('alpha.md');
+  await expect(firstWindow.locator('.tab-strip')).toBeHidden();
+  await expect(firstWindow.locator('.document-title')).toContainText('alpha.md');
+  await expect(firstWindow.locator('.document-title')).toHaveAttribute('aria-haspopup', 'menu');
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Alpha');
   const localImage = firstWindow.locator('.milkdown-image-block img[data-type="image-block"]');
   await expect(localImage).toHaveAttribute('src', pathToFileURL(await fs.realpath(imagePath)).href);
@@ -72,8 +75,8 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   expect(toolbarMetrics.toolbarHeight, JSON.stringify(toolbarMetrics)).toBeLessThan(60);
   expect(toolbarMetrics.rowSpread, JSON.stringify(toolbarMetrics)).toBeLessThan(4);
   await firstWindow.screenshot({ path: 'receipts/desktop-toolbar-full-width.png' });
-  await expect(firstWindow.getByTestId('breadcrumb-button')).toHaveAttribute('title', `Datei im Finder zeigen\n/private${alphaPath}`);
-  await firstWindow.getByTestId('breadcrumb-button').click();
+  await expect(firstWindow.getByTestId('breadcrumb-button')).toBeHidden();
+  await chooseDocumentAction(firstWindow, 'reveal');
   await expect(firstWindow.locator('.status-message')).not.toContainText('Finder konnte nicht geöffnet werden.');
 
   const initialSidebarWidth = await firstWindow.getByTestId('sidebar').boundingBox();
@@ -99,45 +102,52 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   await expect(firstWindow.locator('[data-action="toggle-sidebar"]')).toHaveAttribute('aria-expanded', 'true');
   await expect(firstWindow.locator('.file-list')).toBeVisible();
 
-  await firstWindow.getByTestId('language-toggle').click();
-  await expect(firstWindow.locator('[data-action="choose-folder"] span:last-child')).toHaveText('Open Folder');
-  await firstWindow.getByTestId('language-toggle').click();
-  await firstWindow.locator('.workspace-settings').click();
-  await expect(firstWindow.locator('#settings-dialog .settings-list')).toBeVisible();
-  await firstWindow.locator('#settings-dialog button.primary-action[data-cancel]').click();
+  let settings = await openSettings(firstWindow);
+  await settings.locator('[data-settings-language]').click();
+  settings = firstWindow.locator('#settings-dialog');
+  await expect(settings.locator('#settings-title')).toHaveText('Settings');
+  await expect(settings.locator('[data-settings-folder]')).toHaveText('Open Folder');
+  await settings.locator('[data-settings-language]').click();
+  settings = firstWindow.locator('#settings-dialog');
+  await expect(settings.locator('#settings-title')).toHaveText('Einstellungen');
+  await settings.locator('button.primary-action[data-cancel]').click();
 
   await selectSidebarFile(firstWindow, 'alpha.md');
-  await expect(firstWindow.locator('[data-action="clear-selection"]')).toBeEnabled();
-  await firstWindow.locator('[data-action="clear-selection"]').click();
-  await expect(firstWindow.locator('[data-action="clear-selection"]')).toHaveCount(0);
+  await expect(firstWindow.locator('.selection-toolbar')).toBeVisible();
+  await selectSidebarFile(firstWindow, 'alpha.md');
+  await expect(firstWindow.locator('.selection-toolbar')).toHaveCount(0);
 
   await firstWindow.locator('.file-item', { hasText: 'beta.md' }).click();
   await expect(firstWindow.locator('.tab')).toHaveCount(2);
-  await expect(firstWindow.locator('.document-title')).toHaveText('beta.md');
+  await expect(firstWindow.locator('.document-title')).toContainText('beta.md');
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Beta');
   const activeTab = firstWindow.locator('.tab[aria-selected="true"]');
   await expect(activeTab).toHaveAttribute('tabindex', '0');
   await expect(firstWindow.locator('.tab[aria-selected="false"]')).toHaveAttribute('tabindex', '-1');
   await activeTab.focus();
   await activeTab.press('ArrowLeft');
-  await expect(firstWindow.locator('.document-title')).toHaveText('alpha.md');
+  await expect(firstWindow.locator('.document-title')).toContainText('alpha.md');
   await expect(firstWindow.locator('.tab[aria-selected="true"]')).toBeFocused();
   await firstWindow.locator('.tab', { hasText: 'beta.md' }).click();
 
   await firstWindow.locator('.ProseMirror').click();
   await firstWindow.keyboard.type(' Visuell geprüft.');
-  await firstWindow.getByTestId('save-button').click();
-  await expect(firstWindow.locator('.status-message')).toContainText('Gespeichert');
+  await chooseDocumentAction(firstWindow, 'save');
+  await expect(firstWindow.locator('.document-save-state')).toHaveText('Gesichert');
   await expect.poll(async () => fs.readFile(betaPath, 'utf8'), {
     message: 'Die visuelle Änderung muss als Markdown gespeichert werden.',
   }).toContain('Visuell geprüft.');
 
-  await firstWindow.getByTestId('history-button').click();
+  await chooseDocumentAction(firstWindow, 'history');
   const historyDialog = firstWindow.locator('#history-dialog');
   await expect(historyDialog).toBeVisible();
   await expect(historyDialog.locator('.history-item')).toHaveCount(1);
-  await historyDialog.locator('[data-restore-id]').first().click();
-  await expect(firstWindow.locator('.status-message')).toContainText('Frühere Version wiederhergestellt.');
+  await historyDialog.locator('[data-history-preview]').first().click();
+  await expect(historyDialog.locator('.history-preview')).toContainText('Beta');
+  firstWindow.once('dialog', (dialog) => void dialog.accept());
+  await historyDialog.locator('[data-history-restore]').click();
+  await expect(historyDialog).toHaveCount(0);
+  await expect(firstWindow.locator('.document-save-state')).toHaveText('Gesichert');
   await expect.poll(async () => fs.readFile(betaPath, 'utf8')).not.toContain('Visuell geprüft.');
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Beta');
 
@@ -158,15 +168,22 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   await firstWindow.keyboard.press('Meta+z');
   await expect(firstWindow.locator('.ProseMirror')).not.toContainText('UndoMarker');
   firstWindow.once('dialog', (dialog) => void dialog.accept());
-  await firstWindow.getByTestId('reload-button').click();
-  await expect(firstWindow.getByTestId('save-button')).toBeDisabled({ timeout: 5000 });
+  await chooseDocumentAction(firstWindow, 'reload');
+  await expect(firstWindow.locator('.document-save-state')).toHaveText('Gesichert', { timeout: 5000 });
 
   await fs.appendFile(betaPath, '\n\nExterne Änderung.\n', 'utf8');
-  await expect(firstWindow.locator('.status-message', { hasText: 'neu geladen' })).toBeVisible({ timeout: 4000 });
+  const externalConflict = firstWindow.getByTestId('conflict-center-button');
+  await expect(externalConflict).toBeVisible({ timeout: 4000 });
+  await externalConflict.click();
+  const externalConflictDialog = firstWindow.locator('#conflict-dialog');
+  await expect(externalConflictDialog.locator('.conflict-item')).toContainText('Datei wurde extern geändert');
+  firstWindow.once('dialog', (dialog) => void dialog.accept());
+  await externalConflictDialog.locator('[data-conflict-disk]').click();
+  await expect(externalConflictDialog).toHaveCount(0);
   await expect(firstWindow.locator('.ProseMirror')).toContainText('Externe Änderung.');
 
   await firstWindow.locator('.file-item', { hasText: 'gamma.md' }).click();
-  await expect(firstWindow.locator('.document-title')).toHaveText('gamma.md');
+  await expect(firstWindow.locator('.document-title')).toContainText('gamma.md');
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Gamma');
   const scrollMetrics = await firstWindow.locator('.editor-host').evaluate(async (element) => {
     element.style.scrollBehavior = 'auto';
@@ -203,8 +220,8 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   await firstWindow.locator('.zoom-input').press('Enter');
   const chromeAfterZoom = await firstWindow.getByTestId('sidebar').boundingBox();
   expect(chromeAfterZoom?.width).toBeCloseTo(chromeBeforeZoom?.width ?? 0, 1);
-  await firstWindow.locator('[data-view-mode="pages"]').click();
-  await firstWindow.locator('[data-page-columns="2"]').click();
+  await chooseViewAction(firstWindow, 'pages');
+  await choosePageColumns(firstWindow, 2);
   await expect(firstWindow.locator('.page-preview-grid')).toHaveAttribute('data-page-columns', '2');
   expect(await firstWindow.locator('.page-preview-sheet').count()).toBeGreaterThanOrEqual(2);
   const pageMetrics = await firstWindow.locator('.editor-host.page-view').evaluate((element) => ({
@@ -231,7 +248,7 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   expect(pageMetrics.horizontalOverflow, JSON.stringify(pageMetrics)).toBe(false);
   await firstWindow.locator('.editor-host.page-view').evaluate((element) => element.scrollTo({ top: 0, left: 0 }));
   await firstWindow.screenshot({ path: 'receipts/desktop-page-view.png' });
-  await firstWindow.locator('[data-view-mode="flow"]').click();
+  await chooseViewAction(firstWindow, 'flow');
 
   await selectSidebarFile(firstWindow, 'gamma.md');
   await selectSidebarFile(firstWindow, 'alpha.md');
@@ -292,13 +309,12 @@ test('opens a Markdown document passed by macOS or the command line', async () =
   });
   const window = await electronApp.firstWindow();
 
-  await expect(window.locator('.document-title')).toHaveText('direct-open.md');
+  await expect(window.locator('.document-title')).toContainText('direct-open.md');
   await expect(window.locator('.tab')).toHaveCount(1);
   await expect(window.locator('.ProseMirror h1')).toContainText('Direkt geöffnet');
   await window.locator('.ProseMirror').click();
   await window.keyboard.type(' Externer Writeback.');
-  await expect(window.getByTestId('save-button')).toBeEnabled();
-  await window.getByTestId('save-button').click();
+  await chooseDocumentAction(window, 'save');
   await expect.poll(async () => fs.readFile(filePath, 'utf8'), {
     message: 'Eine externe Datei muss auch ausserhalb des Arbeitsordners schreibbar bleiben.',
   }).toContain('Externer Writeback.');
@@ -328,11 +344,12 @@ test('opens a Markdown document passed by macOS or the command line', async () =
   const restoredWindow = await electronApp.firstWindow();
   await expect(restoredWindow.locator('.tab', { hasText: 'goal.md' })).toHaveCount(1);
   await restoredWindow.locator('.tab', { hasText: 'goal.md' }).click();
-  await expect(restoredWindow.locator('.document-title')).toHaveText('goal.md');
+  await expect(restoredWindow.locator('.document-title')).toContainText('goal.md');
+  await openPlaces(restoredWindow);
   await expect(restoredWindow.locator('.tree-root .file-item', { hasText: 'goal.md' })).toHaveCount(1);
   await restoredWindow.locator('.tab', { hasText: 'direct-open.md' }).click();
-  await expect(restoredWindow.locator('.document-title')).toHaveText('direct-open.md');
-  await expect(restoredWindow.locator('.status-message')).not.toContainText('ausserhalb');
+  await expect(restoredWindow.locator('.document-title')).toContainText('direct-open.md');
+  await expect(restoredWindow.locator('.status-message')).not.toContainText(/au(?:ss|ß)erhalb/);
 
   await electronApp.close();
 });
@@ -368,7 +385,7 @@ test('collects missing documents in the Conflict Center', async ({ }) => {
     env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: userDataDirectory },
   });
   const window = await electronApp.firstWindow();
-  await expect(window.locator('.document-title')).toHaveText('kept.md');
+  await expect(window.locator('.document-title')).toContainText('kept.md');
 
   await fs.unlink(removedPath);
   const conflictButton = window.getByTestId('conflict-center-button');
@@ -385,7 +402,7 @@ test('collects missing documents in the Conflict Center', async ({ }) => {
   await window.screenshot({ path: 'receipts/desktop-conflict-center-dark.png' });
   await window.evaluate(() => { document.body.dataset.theme = 'light'; });
   await conflictDialog.locator('[data-conflict-open]').click();
-  await expect(window.locator('.document-title')).toHaveText('removed.md');
+  await expect(window.locator('.document-title')).toContainText('removed.md');
   await expect(window.locator('.tab', { hasText: 'removed.md' })).toHaveClass(/conflict/);
   await expect(window.locator('.missing-document-state')).toBeVisible();
   await expect(window.locator('.missing-document-state')).toContainText('Datei nicht gefunden');
@@ -433,18 +450,23 @@ test('runs a local assistant proposal with diff, apply and undo', async () => {
     },
   });
   const window = await electronApp.firstWindow();
+  await openPlaces(window);
   await window.locator('.file-item', { hasText: 'brief.md' }).click();
   await expect(window.locator('.ProseMirror h1')).toContainText('Brief');
 
-  await window.getByTestId('assistant-toggle').click();
+  const assistantEntry = window.getByTestId('assistant-toggle');
+  await expect(assistantEntry).toBeVisible();
+  await expect(window.getByTestId('assistant-fab')).toHaveCount(0);
+  await expect(window.locator('[data-action="toggle-assistant"]:visible')).toHaveCount(1);
+  await assistantEntry.click();
   const panel = window.locator('.assistant-panel');
   await expect(panel).toBeVisible();
   await expect(panel).toHaveAttribute('role', 'complementary');
   await expect(panel.locator('textarea')).toBeFocused();
   await panel.press('Escape');
   await expect(panel).toBeHidden();
-  await expect(window.getByTestId('assistant-toggle')).toBeFocused();
-  await window.getByTestId('assistant-fab').click();
+  await expect(assistantEntry).toBeFocused();
+  await assistantEntry.click();
   await expect(panel).toBeVisible();
   await expect(window.getByTestId('assistant-run')).toHaveText('Senden');
   await panel.locator('textarea').fill('Zusammenfassung einfügen');
@@ -458,7 +480,7 @@ test('runs a local assistant proposal with diff, apply and undo', async () => {
 
   await proposal.getByRole('button', { name: 'Übernehmen' }).click();
   await expect(panel.locator('.proposal')).toHaveCount(0);
-  await window.getByTestId('save-button').click();
+  await chooseDocumentAction(window, 'save');
   await expect.poll(async () => fs.readFile(filePath, 'utf8')).toContain('## Zusammenfassung');
 
   await panel.locator('[data-action="assistant-undo"]').click();
@@ -498,16 +520,17 @@ test('keeps assistant undo available after restarting the app', async () => {
 
   let electronApp = await _electron.launch(launchOptions);
   const firstWindow = await electronApp.firstWindow();
+  await openPlaces(firstWindow);
   await firstWindow.locator('.file-item', { hasText: 'restart.md' }).click();
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Restart');
 
-  await firstWindow.getByTestId('assistant-fab').click();
+  await firstWindow.getByTestId('assistant-toggle').click();
   const panel = firstWindow.locator('.assistant-panel');
   await panel.locator('.quick-commands button').first().click();
   await panel.locator('.proposal').waitFor({ state: 'visible' });
   await panel.getByRole('button', { name: 'Übernehmen' }).click();
   await expect(panel.locator('.proposal')).toHaveCount(0);
-  await firstWindow.getByTestId('save-button').click();
+  await chooseDocumentAction(firstWindow, 'save');
   await expect.poll(async () => fs.readFile(filePath, 'utf8'), {
     message: 'The assistant result must be on disk before the restart.',
   }).toContain('## Zusammenfassung');
@@ -518,7 +541,7 @@ test('keeps assistant undo available after restarting the app', async () => {
   const restoredWindow = await electronApp.firstWindow();
   await expect(restoredWindow.locator('.tab', { hasText: 'restart.md' })).toHaveCount(1);
   await expect(restoredWindow.locator('.ProseMirror h1')).toContainText('Restart');
-  await restoredWindow.getByTestId('assistant-fab').click();
+  await restoredWindow.getByTestId('assistant-toggle').click();
   const restoredPanel = restoredWindow.locator('.assistant-panel');
   await restoredPanel.locator('[data-action="assistant-undo"]').click();
   await expect(restoredWindow.locator('.status-message')).toContainText('Assistentenänderung zurückgenommen.');
@@ -528,7 +551,7 @@ test('keeps assistant undo available after restarting the app', async () => {
   await electronApp.close();
 });
 
-test('runs onboarding once and creates a sample workspace', async () => {
+test('starts without compulsory onboarding and offers setup from settings', async () => {
   const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'markdown-magic-onboarding-'));
   const userDataDirectory = path.join(testRoot, 'user-data');
   const homeDirectory = path.join(testRoot, 'home');
@@ -545,6 +568,12 @@ test('runs onboarding once and creates a sample workspace', async () => {
     },
   });
   const window = await electronApp.firstWindow();
+  await expect(window.locator('#onboarding-dialog')).toHaveCount(0);
+  await expect(window.locator('.welcome-actions [data-action="new-file"]')).toBeVisible();
+  await expect(window.locator('.welcome-actions [data-action="open-file"]')).toBeVisible();
+
+  const settings = await openSettings(window);
+  await settings.locator('[data-settings-onboarding]').click();
   const dialog = window.locator('#onboarding-dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Markdown wie ein Dokument öffnen');
@@ -552,7 +581,6 @@ test('runs onboarding once and creates a sample workspace', async () => {
   await dialog.getByRole('button', { name: 'Weiter' }).click();
   await expect(dialog).toContainText('Arbeitsordner wählen');
   await dialog.locator('[data-onboarding="create-sample"]').click();
-  await expect(window.locator('.file-item')).toHaveCount(3);
   await expect.poll(async () => fs.access(path.join(homeDirectory, 'Markdown Magic Start', 'notizen.txt')).then(() => true, () => false)).toBe(true);
   await dialog.getByRole('button', { name: 'Weiter' }).click();
   await expect(dialog).toContainText('Standard-App wählen');
@@ -569,6 +597,7 @@ test('runs onboarding once and creates a sample workspace', async () => {
   await expect(dialog).toContainText('Assistent optional');
   await dialog.getByRole('button', { name: 'Loslegen' }).click();
   await expect(dialog).toHaveCount(0);
+  await openPlaces(window);
   await expect(window.locator('.file-item')).toHaveCount(3);
   await expect.poll(async () => fs.readFile(path.join(homeDirectory, 'Markdown Magic Start', 'Willkommen.md'), 'utf8'))
     .toContain('Markdown Magic öffnet lokale Textdateien');
@@ -576,7 +605,7 @@ test('runs onboarding once and creates a sample workspace', async () => {
   await electronApp.close();
 });
 
-test('creates text files from the app and keeps compact controls centered', async () => {
+test('creates immediate drafts and keeps the progressive controls centered', async () => {
   const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'markdown-magic-new-file-'));
   const userDataDirectory = path.join(testRoot, 'user-data');
   const documentRoot = path.join(testRoot, 'documents');
@@ -599,9 +628,16 @@ test('creates text files from the app and keeps compact controls centered', asyn
   });
   const window = await electronApp.firstWindow();
   await window.evaluate(() => globalThis.resizeTo(1280, 820));
-  await expect(window.getByTestId('new-group-button')).toBeVisible();
-  await expect(window.getByTestId('assistant-fab')).toBeVisible();
-  await expect(window.getByTestId('language-toggle')).toBeVisible();
+  await expect(window.locator('.group-rail')).toBeHidden();
+  await expect(window.getByTestId('assistant-fab')).toHaveCount(0);
+  await expect(window.getByTestId('assistant-toggle')).toBeHidden();
+  await expect(window.getByTestId('language-toggle')).toBeHidden();
+  await expect(window.getByTestId('theme-toggle')).toBeHidden();
+  await expect(window.locator('.sidebar-settings')).toBeVisible();
+
+  const newFileButton = window.locator('.sidebar-header [data-action="new-file"]');
+  await newFileButton.click();
+  await expect(window.getByTestId('assistant-toggle')).toBeVisible();
 
   const controlMetrics = await window.evaluate(() => {
     const centerDelta = (outerSelector: string, innerSelector: string) => {
@@ -613,56 +649,38 @@ test('creates text files from the app and keeps compact controls centered', asyn
         y: Math.abs((outer.top + outer.height / 2) - (inner.top + inner.height / 2)),
       };
     };
-    const language = document.querySelector<HTMLElement>('[data-testid="language-toggle"]');
     return {
-      newGroup: centerDelta('[data-testid="new-group-button"]', '[data-testid="new-group-button"] .lucide'),
-      assistant: centerDelta('[data-testid="assistant-fab"]', '[data-testid="assistant-fab"] .lucide'),
+      assistant: centerDelta('[data-testid="assistant-toggle"]', '[data-testid="assistant-toggle"] .lucide'),
+      settings: centerDelta('.sidebar-settings', '.sidebar-settings .lucide'),
       search: centerDelta('.file-search', '.search-icon .lucide'),
-      languageWidth: language?.getBoundingClientRect().width ?? 0,
-      languageHeight: language?.getBoundingClientRect().height ?? 0,
-      languageText: language?.textContent?.trim() ?? '',
-      languageIcons: language?.querySelectorAll('.lucide').length ?? -1,
     };
   });
-  expect(controlMetrics.newGroup?.x, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
-  expect(controlMetrics.newGroup?.y, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
   expect(controlMetrics.assistant?.x, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
   expect(controlMetrics.assistant?.y, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
+  expect(controlMetrics.settings?.y, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
   expect(controlMetrics.search?.y, JSON.stringify(controlMetrics)).toBeLessThanOrEqual(1);
-  expect(controlMetrics.languageWidth, JSON.stringify(controlMetrics)).toBeCloseTo(30, 0);
-  expect(controlMetrics.languageHeight, JSON.stringify(controlMetrics)).toBeCloseTo(30, 0);
-  expect(controlMetrics.languageText).toBe('DE');
-  expect(controlMetrics.languageIcons).toBe(0);
 
-  const newFileButton = window.locator('[data-action="new-file"]');
+  await expect(window.locator('#new-file-dialog')).toHaveCount(0);
+  await expect(window.locator('.ProseMirror:visible')).toBeFocused();
+  await expect(window.locator('.document-title')).toContainText('Ohne Titel');
+  await expect(window.locator('.document-title')).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(window.locator('.tab')).toHaveCount(1);
+  await expect(window.locator('.tab-strip')).toBeHidden();
+  await window.keyboard.insertText('Eine Idee, die lokal bleiben soll.');
+  await expect.poll(async () => {
+    const result = await window.evaluate(() => globalThis.window.markdownMagic.listDrafts());
+    return result.drafts?.find((item) => item.draft)?.path ?? '';
+  }).not.toBe('');
+  const drafts = await window.evaluate(() => globalThis.window.markdownMagic.listDrafts());
+  const draftPath = drafts.drafts?.find((item) => item.draft)?.path;
+  expect(draftPath).toBeTruthy();
+  await expect.poll(async () => fs.readFile(draftPath!, 'utf8')).toContain('Eine Idee, die lokal bleiben soll.');
+
   await newFileButton.click();
-  const dialog = window.locator('#new-file-dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator('[name="fileName"]')).toBeFocused();
-  await dialog.locator('.dialog-header [data-cancel]').focus();
-  await dialog.locator('.dialog-header [data-cancel]').press('Shift+Tab');
-  await expect(dialog.locator('button[type="submit"]')).toBeFocused();
-  await dialog.locator('[name="fileName"]').focus();
-  await dialog.locator('[name="fileName"]').fill('idee.txt');
-  await window.screenshot({ path: 'receipts/desktop-new-file-dialog.png' });
-  await dialog.locator('[name="fileName"]').press('Enter');
-
-  const createdPath = path.join(documentRoot, 'idee.txt');
-  await expect(dialog).toHaveCount(0);
-  await expect(window.locator('.document-title')).toHaveText('idee.txt');
-  await expect(window.locator('.tab', { hasText: 'idee.txt' })).toHaveCount(1);
-  await expect(window.locator('.tree-root .file-item', { hasText: 'idee.txt' })).toHaveCount(1);
-  await expect.poll(async () => fs.readFile(createdPath, 'utf8')).toContain('# idee.txt');
-
-  await window.locator('[data-action="new-file"]').click();
-  const duplicateDialog = window.locator('#new-file-dialog');
-  await duplicateDialog.locator('[name="fileName"]').fill('idee.txt');
-  await duplicateDialog.locator('[name="fileName"]').press('Enter');
-  await expect(duplicateDialog.locator('.dialog-error')).toContainText('existiert bereits');
-  await expect(duplicateDialog.locator('[name="fileName"]')).toHaveAttribute('aria-invalid', 'true');
-  await expect(duplicateDialog.locator('button[type="submit"]')).toBeEnabled();
-  await duplicateDialog.locator('[data-cancel]').first().click();
-  await expect(newFileButton).toBeFocused();
+  await expect(window.locator('#new-file-dialog')).toHaveCount(0);
+  await expect(window.locator('.tab')).toHaveCount(2);
+  await expect(window.locator('.tab-strip')).toBeVisible();
+  await expect(window.locator('.document-title')).toContainText('Ohne Titel');
 
   await electronApp.close();
 });
@@ -695,42 +713,53 @@ test('supports text files, header controls, pins and stable page layouts', async
   const firstWindow = await electronApp.firstWindow();
   await expect(firstWindow.locator('.brand-magic')).toHaveText('Magic');
 
+  await openPlaces(firstWindow);
   await firstWindow.locator('.tree-row.directory', { hasText: 'notes' }).locator('[data-toggle-directory]').click();
   await firstWindow.locator('.file-item', { hasText: 'alpha.txt' }).click();
-  await expect(firstWindow.locator('.document-title')).toHaveText('alpha.txt');
-  await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Textnotiz');
-  await firstWindow.locator('.ProseMirror').click();
-  await firstWindow.keyboard.press('Meta+ArrowDown');
+  await expect(firstWindow.locator('.document-title')).toContainText('alpha.txt');
+  const textEditor = firstWindow.locator('.source-editor-input');
+  await expect(textEditor).toBeVisible();
+  await expect(textEditor).toHaveValue(/# Textnotiz/);
+  await textEditor.click();
+  await firstWindow.keyboard.press('Meta+End');
   await firstWindow.keyboard.type('\n\nNachtrag aus Markdown Magic.');
-  await firstWindow.getByTestId('save-button').click();
+  await chooseDocumentAction(firstWindow, 'save');
   await expect.poll(async () => fs.readFile(textPath, 'utf8')).toContain('Nachtrag aus Markdown Magic.');
 
-  await firstWindow.getByTestId('language-toggle').click();
-  await expect(firstWindow.locator('[data-action="choose-folder"] span:last-child')).toHaveText('Open Folder');
-  await firstWindow.getByTestId('language-toggle').click();
-  await expect(firstWindow.locator('[data-action="choose-folder"] span:last-child')).toHaveText('Ordner öffnen');
-
-  await firstWindow.getByTestId('theme-toggle').click();
+  let settings = await openSettings(firstWindow);
+  await settings.locator('[data-settings-language]').click();
+  settings = firstWindow.locator('#settings-dialog');
+  await expect(settings.locator('[data-settings-folder]')).toHaveText('Open Folder');
+  await settings.locator('[data-settings-language]').click();
+  settings = firstWindow.locator('#settings-dialog');
+  await expect(settings.locator('[data-settings-folder]')).toHaveText('Ordner öffnen');
+  await settings.locator('[data-settings-theme]').click();
   await expect(firstWindow.locator('body')).toHaveAttribute('data-theme', 'light');
-  await firstWindow.getByTestId('theme-toggle').click();
+  settings = firstWindow.locator('#settings-dialog');
+  await settings.locator('[data-settings-theme]').click();
   await expect(firstWindow.locator('body')).toHaveAttribute('data-theme', 'dark');
-  await firstWindow.getByTestId('theme-toggle').click();
-  await expect(firstWindow.getByTestId('theme-toggle')).toHaveAttribute('title', 'Systemdarstellung');
+  settings = firstWindow.locator('#settings-dialog');
+  await settings.locator('[data-settings-theme]').click();
+  await expect(firstWindow.locator('body')).toHaveAttribute('data-theme', /light|dark/);
+  settings = firstWindow.locator('#settings-dialog');
+  await expect(settings.locator('[data-settings-theme]')).toHaveText('Systemdarstellung');
+  await settings.locator('button.primary-action[data-cancel]').click();
 
-  await firstWindow.locator('.tree-row.directory', { hasText: 'notes' }).hover();
-  await firstWindow.locator('.tree-row.directory', { hasText: 'notes' }).locator('[data-pin-path]').first().click();
-  await expect(firstWindow.locator('.tree-heading:not(.recent-heading)')).toHaveText('Angepinnt');
+  const fileRow = firstWindow.locator('.tree-row.file', { hasText: 'alpha.txt' });
+  await fileRow.hover();
+  await fileRow.locator('[data-pin-path]').click();
+  await firstWindow.locator('[data-library-view="favorites"]').click();
+  await expect(firstWindow.locator('.library-document', { hasText: 'alpha.txt' })).toBeVisible();
   await firstWindow.screenshot({ path: 'receipts/desktop-pinned-navigation.png' });
   await electronApp.close();
 
   electronApp = await _electron.launch(launchOptions);
   const restoredWindow = await electronApp.firstWindow();
-  await expect(restoredWindow.locator('.tree-heading:not(.recent-heading)')).toHaveText('Angepinnt');
-  await expect(restoredWindow.locator('.tree-row.directory', { hasText: 'notes' })).toBeVisible();
-
-  await restoredWindow.locator('.file-item', { hasText: 'alpha.txt' }).click();
-  await restoredWindow.locator('[data-view-mode="pages"]').click();
-  await restoredWindow.locator('[data-page-columns="3"]').click();
+  await restoredWindow.locator('[data-library-view="favorites"]').click();
+  await expect(restoredWindow.locator('.library-document', { hasText: 'alpha.txt' })).toBeVisible();
+  await restoredWindow.locator('.library-document', { hasText: 'alpha.txt' }).click();
+  await chooseViewAction(restoredWindow, 'pages');
+  await choosePageColumns(restoredWindow, 3);
   await expect(restoredWindow.locator('.page-preview-grid')).toHaveAttribute('data-page-columns', '3');
   let layoutMetrics = await restoredWindow.locator('.editor-host.page-view').evaluate((element) => ({
     clientWidth: element.clientWidth,
@@ -770,8 +799,9 @@ test('exposes native view commands and a compact view menu', async () => {
     env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: userDataDirectory },
   });
   const window = await electronApp.firstWindow();
+  await openPlaces(window);
   await window.locator('.file-item', { hasText: 'menu.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('menu.md');
+  await expect(window.locator('.document-title')).toContainText('menu.md');
 
   await window.keyboard.press('Meta+/');
   const shortcuts = window.locator('#shortcuts-dialog');
@@ -782,22 +812,24 @@ test('exposes native view commands and a compact view menu', async () => {
 
   await window.keyboard.press('Alt+Meta+2');
   await expect(window.locator('.editor-host')).toHaveClass(/page-view/, { timeout: 3000 }).catch(() => undefined);
-  await window.locator('[data-view-mode="pages"]').click();
+  await chooseViewAction(window, 'pages');
   await expect(window.locator('.page-preview-grid')).toHaveAttribute('data-page-columns', '1');
   await window.keyboard.press('Alt+Meta+1').catch(() => undefined);
-  await window.locator('[data-view-mode="flow"]').click();
+  await chooseViewAction(window, 'flow');
   await expect(window.locator('.editor-host')).not.toHaveClass(/page-view/);
 
-  await window.locator('[data-view-mode="pages"]').click();
+  await chooseViewAction(window, 'pages');
   await expect(window.locator('.editor-host')).toHaveClass(/page-view/);
-  await expect(window.locator('[data-view-mode="pages"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(window.locator('[data-view-mode="flow"]')).toHaveAttribute('aria-pressed', 'false');
   await window.getByTestId('view-menu-button').click();
   const menu = window.locator('#view-menu');
   await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-menu-view="pages"]')).toHaveClass(/active/);
+  await expect(menu.locator('[data-menu-view="flow"]')).not.toHaveClass(/active/);
   await menu.locator('[data-menu-columns="3"]').click();
   await expect(window.locator('.page-preview-grid')).toHaveAttribute('data-page-columns', '3');
-  await expect(window.locator('button[data-page-columns="3"]')).toHaveAttribute('aria-pressed', 'true');
+  await window.getByTestId('view-menu-button').click();
+  await expect(window.locator('#view-menu [data-menu-columns="3"]')).toHaveAttribute('aria-checked', 'true');
+  await window.keyboard.press('Escape');
 
   await window.getByTestId('view-menu-button').click();
   await window.locator('#view-menu [data-menu-zoom="out"]').click();
@@ -813,14 +845,16 @@ test('exposes native view commands and a compact view menu', async () => {
   await window.keyboard.press('Escape');
 
   await window.keyboard.press('Meta+,');
-  const settings = window.locator('#settings-dialog');
+  let settings = window.locator('#settings-dialog');
   await expect(settings).toBeVisible();
-  await expect(settings).toContainText('Beides lässt sich direkt oben im Fenster umschalten.');
-  await settings.getByRole('button', { name: 'Schliessen', exact: true }).click();
-  await window.getByTestId('theme-toggle').click();
+  await expect(settings).toContainText('Lokale App-Einstellungen');
+  await settings.locator('[data-settings-theme]').click();
   await expect(window.locator('body')).toHaveAttribute('data-theme', 'light');
-  await window.getByTestId('theme-toggle').click();
+  settings = window.locator('#settings-dialog');
+  await settings.locator('[data-settings-theme]').click();
   await expect(window.locator('body')).toHaveAttribute('data-theme', 'dark');
+  settings = window.locator('#settings-dialog');
+  await settings.locator('button.primary-action[data-cancel]').click();
   await electronApp.close();
 });
 
@@ -856,6 +890,7 @@ test('keeps compact dark windows readable without global horizontal overflow', a
   });
   await expect(window.locator('body')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => window.evaluate(() => globalThis.localStorage.getItem('markdown-magic:theme'))).toBe('dark');
+  await openPlaces(window);
   await window.locator('.file-item', { hasText: 'compact.md' }).click();
   await expect(window.locator('.ProseMirror a')).toBeVisible();
 
@@ -960,11 +995,11 @@ test('closes other tabs from the tab context menu', async () => {
   await expect(menu.locator('[data-menu-close-group]')).toBeEnabled();
   await menu.locator('[data-menu-close-others]').click();
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.tab', { hasText: 'action-beta.md' })).toBeVisible();
-  await expect(window.locator('.document-title')).toHaveText('action-beta.md');
+  await expect(window.locator('.tab-strip')).toBeHidden();
+  await expect(window.locator('.tab', { hasText: 'action-beta.md' })).toHaveCount(1);
+  await expect(window.locator('.document-title')).toContainText('action-beta.md');
 
-  await window.locator('.tab', { hasText: 'action-beta.md' }).click({ button: 'right' });
-  await window.locator('#tab-menu [data-menu-reveal]').click();
+  await chooseDocumentAction(window, 'reveal');
   await expect(window.locator('.status-message')).not.toContainText('Finder konnte nicht geöffnet werden.');
   await electronApp.close();
 });
@@ -1000,17 +1035,21 @@ test('supports tab close shortcuts and middle click', async () => {
   });
   const window = await electronApp.firstWindow();
   await expect(window.locator('.tab')).toHaveCount(4);
-  await expect(window.locator('.document-title')).toHaveText('one.md');
+  await expect(window.locator('.document-title')).toContainText('one.md');
+
+  await window.locator('.tab', { hasText: 'three.md' }).click({ button: 'middle' });
+  await expect(window.locator('.tab')).toHaveCount(3);
 
   await window.keyboard.press('Meta+w');
-  await expect(window.locator('.tab')).toHaveCount(3);
-  await expect(window.locator('.document-title')).toHaveText('two.md');
+  await expect(window.locator('.tab')).toHaveCount(2);
+  await expect(window.locator('.document-title')).toContainText('two.md');
 
   await window.keyboard.press('Shift+Meta+w');
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.tab', { hasText: 'solo.md' })).toBeVisible();
+  await expect(window.locator('.tab-strip')).toBeHidden();
+  await expect(window.locator('.tab', { hasText: 'solo.md' })).toHaveCount(1);
 
-  await window.locator('.tab', { hasText: 'solo.md' }).click({ button: 'middle' });
+  await window.keyboard.press('Meta+w');
   await expect(window.locator('.tab')).toHaveCount(0);
   await expect(window.locator('.document-title')).toHaveText('');
   await electronApp.close();
@@ -1048,16 +1087,17 @@ test('restores a closed tab with its group and unsaved content', async () => {
   await expect(window.locator('.tab')).toHaveCount(2);
 
   await window.locator('.tab', { hasText: 'restore-beta.md' }).click();
+  await expect(window.locator('.ProseMirror h1')).toContainText('Beta');
   await window.locator('.ProseMirror').click();
   await window.keyboard.press('Meta+ArrowDown');
   await window.keyboard.type('\n\nUnsaved restore marker.');
   await window.keyboard.press('Meta+w');
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.document-title')).toHaveText('restore-alpha.md');
+  await expect(window.locator('.document-title')).toContainText('restore-alpha.md');
 
   await window.keyboard.press('Shift+Meta+t');
   await expect(window.locator('.tab')).toHaveCount(2);
-  await expect(window.locator('.document-title')).toHaveText('restore-beta.md');
+  await expect(window.locator('.document-title')).toContainText('restore-beta.md');
   await expect(window.locator('.tab.active.color-blue')).toContainText('restore-beta.md');
   await expect(window.locator('.ProseMirror')).toContainText('Unsaved restore marker.');
   await electronApp.close();
@@ -1102,7 +1142,7 @@ test('closes other tabs in a group while keeping other groups', async () => {
   await expect(window.locator('.tab')).toHaveCount(2);
   await expect(window.locator('.tab', { hasText: 'group-solo.md' })).toBeVisible();
   await expect(window.locator('.tab', { hasText: 'group-two.md' })).toBeVisible();
-  await expect(window.locator('.document-title')).toHaveText('group-two.md');
+  await expect(window.locator('.document-title')).toContainText('group-two.md');
   await expect(window.locator('.group-chip', { hasText: 'Partial' })).toContainText('1');
   await electronApp.close();
 });
@@ -1208,6 +1248,7 @@ test('opens files and view actions from the command palette', async () => {
     env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: userDataDirectory },
   });
   const window = await electronApp.firstWindow();
+  await openPlaces(window);
   await expect(window.locator('.file-item')).toHaveCount(1);
   const canonicalCurrentFolder = await fs.realpath(documentRoot);
   const canonicalPreviousFolder = await fs.realpath(previousFolder);
@@ -1218,6 +1259,7 @@ test('opens files and view actions from the command palette', async () => {
     ]));
     globalThis.location.reload();
   }, { current: canonicalCurrentFolder, previous: canonicalPreviousFolder });
+  await openPlaces(window);
   await expect(window.locator('.file-item')).toHaveCount(1);
 
   await window.keyboard.press('Meta+k');
@@ -1228,7 +1270,7 @@ test('opens files and view actions from the command palette', async () => {
   await expect(results.first()).toContainText('palette-alpha.md');
   await window.screenshot({ path: 'receipts/desktop-command-palette.png' });
   await window.keyboard.press('Enter');
-  await expect(window.locator('.document-title')).toHaveText('palette-alpha.md');
+  await expect(window.locator('.document-title')).toContainText('palette-alpha.md');
   await expect(window.locator('.ProseMirror h1')).toContainText('Palette Alpha');
 
   await window.keyboard.press('Meta+k');
@@ -1238,7 +1280,7 @@ test('opens files and view actions from the command palette', async () => {
   await window.keyboard.press('Enter');
   await expect(window.locator('.file-item', { hasText: 'palette-previous.md' })).toHaveCount(1);
   await window.locator('.file-item', { hasText: 'palette-previous.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('palette-previous.md');
+  await expect(window.locator('.document-title')).toContainText('palette-previous.md');
 
   await window.keyboard.press('Meta+k');
   await expect(window.getByTestId('command-palette-input')).toBeVisible();
@@ -1280,6 +1322,7 @@ test('keeps recent documents available across folders and restarts', async () =>
   };
   let electronApp = await _electron.launch(launchOptions);
   let window = await electronApp.firstWindow();
+  await openPlaces(window);
   await expect(window.locator('.file-item')).toHaveCount(1);
   await window.evaluate(({ current, previous }) => {
     window.localStorage.setItem('markdown-magic:recent-documents', JSON.stringify([
@@ -1288,21 +1331,21 @@ test('keeps recent documents available across folders and restarts', async () =>
     ]));
     globalThis.location.reload();
   }, { current: currentPath, previous: previousPath });
-  await expect(window.locator('.recent-row')).toHaveCount(2);
+  await expect(window.locator('.file-list .recent-row')).toHaveCount(2);
 
-  await window.locator('.recent-item', { hasText: 'previous.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('previous.md');
+  await window.locator('.file-list .recent-item', { hasText: 'previous.md' }).click();
+  await expect(window.locator('.document-title')).toContainText('previous.md');
   await expect(window.locator('.ProseMirror h1')).toContainText('Previous');
 
-  await window.locator('.recent-item', { hasText: 'current.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('current.md');
+  await window.locator('.file-list .recent-item', { hasText: 'current.md' }).click();
+  await expect(window.locator('.document-title')).toContainText('current.md');
   await electronApp.close();
 
   electronApp = await _electron.launch(launchOptions);
   window = await electronApp.firstWindow();
-  await expect(window.locator('.recent-row')).toHaveCount(2);
-  await window.locator('.recent-item', { hasText: 'previous.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('previous.md');
+  await expect(window.locator('.file-list .recent-row')).toHaveCount(2);
+  await window.locator('.file-list .recent-item', { hasText: 'previous.md' }).click();
+  await expect(window.locator('.document-title')).toContainText('previous.md');
   await electronApp.close();
 });
 
@@ -1346,8 +1389,9 @@ test('switches between recent workspace folders and restores them after restart'
   };
   let electronApp = await _electron.launch(launchOptions);
   let window = await electronApp.firstWindow();
+  await openPlaces(window);
   await expect(window.locator('.file-item')).toHaveCount(1);
-  await expect(window.getByTestId('folder-switcher')).toHaveValue(canonicalCurrentRoot);
+  await expect(window.locator('[data-library-view="places"]')).toHaveAttribute('aria-current', 'page');
   const untrustedRoot = path.join(testRoot, 'untrusted-workspace');
   await fs.mkdir(untrustedRoot, { recursive: true });
   const untrustedResult = await window.evaluate(
@@ -1365,44 +1409,21 @@ test('switches between recent workspace folders and restores them after restart'
     ]));
     globalThis.location.reload();
   }, { current: canonicalCurrentRoot, previous: canonicalPreviousRoot, archive: canonicalArchiveRoot });
-  const switcher = window.getByTestId('folder-switcher');
-  await expect(switcher.locator('option')).toHaveCount(4);
-
-  await window.getByTestId('folder-manage-button').click();
-  const folderManager = window.locator('#folder-manager');
-  await expect(folderManager).toBeVisible();
-  await expect(folderManager.locator('.folder-manager-row')).toHaveCount(3);
-  await folderManager.locator(`[data-remove-folder="${canonicalArchiveRoot}"]`).click();
-  await expect(folderManager.locator('.folder-manager-row')).toHaveCount(2);
-  await expect(switcher.locator('option')).toHaveCount(3);
-  await folderManager.locator('[data-clear-folders]').click();
-  await expect(folderManager.locator('.folder-manager-row')).toHaveCount(1);
-  await window.keyboard.press('Escape');
-  await expect(folderManager).toHaveCount(0);
-  await expect(switcher).toHaveValue(canonicalCurrentRoot);
-
-  await window.evaluate(({ current, previous }) => {
-    window.localStorage.setItem('markdown-magic:recent-folders', JSON.stringify([
-      { path: previous, name: 'previous-workspace', openedAt: Date.now() - 1000 },
-      { path: current, name: 'current-workspace', openedAt: Date.now() },
-    ]));
-    globalThis.location.reload();
-  }, { current: canonicalCurrentRoot, previous: canonicalPreviousRoot });
-  await expect(switcher.locator('option')).toHaveCount(3);
-
-  await switcher.selectOption({ label: 'previous-workspace' });
+  await openPlaces(window);
+  await expect(window.locator('[data-open-place]')).toHaveCount(3);
+  await window.locator(`[data-open-place="${canonicalPreviousRoot}"]`).click();
   await expect(window.locator('.document-title')).toHaveText('');
   await window.locator('.file-item', { hasText: 'previous.md' }).click();
-  await expect(window.locator('.document-title')).toHaveText('previous.md');
+  await expect(window.locator('.document-title')).toContainText('previous.md');
   await expect(window.locator('.ProseMirror h1')).toContainText('Previous Folder');
   await electronApp.close();
 
   electronApp = await _electron.launch(launchOptions);
   window = await electronApp.firstWindow();
+  await openPlaces(window);
   await expect(window.locator('.file-item', { hasText: 'previous.md' })).toHaveCount(1);
-  const restoredSwitcher = window.getByTestId('folder-switcher');
-  await expect(restoredSwitcher.locator('option')).toHaveCount(3);
-  await restoredSwitcher.selectOption({ label: 'current-workspace' });
+  await expect(window.locator('[data-open-place]')).toHaveCount(3);
+  await window.locator(`[data-open-place="${canonicalCurrentRoot}"]`).click();
   await expect(window.locator('.file-item', { hasText: 'current.md' })).toHaveCount(1);
   await electronApp.close();
 });
@@ -1425,7 +1446,8 @@ test('starts in the macOS home folder and expands navigation lazily', async () =
   });
   const window = await electronApp.firstWindow();
   const canonicalHome = await fs.realpath(homeDirectory);
-  await expect(window.getByTestId('folder-switcher')).toHaveValue(canonicalHome);
+  await openPlaces(window);
+  await expect(window.locator(`[data-open-place="${canonicalHome}"]`)).toHaveClass(/active/);
   await expect(window.locator('.file-item', { hasText: 'welcome.md' })).toBeVisible();
   await expect(window.locator('.file-item', { hasText: 'lazy.md' })).toHaveCount(0);
   await window.locator('.file-search').fill('lazy');
@@ -1440,6 +1462,40 @@ test('starts in the macOS home folder and expands navigation lazily', async () =
   await expect(window.locator('.statusbar')).not.toHaveClass(/is-visible/);
   await electronApp.close();
 });
+
+async function openPlaces(window: Page): Promise<void> {
+  const places = window.locator('[data-library-view="places"]');
+  await places.click();
+  await expect(places).toHaveAttribute('aria-current', 'page');
+}
+
+async function openSettings(window: Page) {
+  await window.locator('.sidebar-settings').click();
+  const dialog = window.locator('#settings-dialog');
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+async function chooseDocumentAction(window: Page, action: string): Promise<void> {
+  await window.locator('.document-title').click();
+  const menu = window.locator('.document-menu');
+  await expect(menu).toBeVisible();
+  await menu.locator(`[data-document-action="${action}"]`).click();
+}
+
+async function chooseViewAction(window: Page, mode: 'flow' | 'pages'): Promise<void> {
+  await window.getByTestId('view-menu-button').click();
+  const menu = window.locator('#view-menu');
+  await expect(menu).toBeVisible();
+  await menu.locator(`[data-menu-view="${mode}"]`).click();
+}
+
+async function choosePageColumns(window: Page, columns: 1 | 2 | 3): Promise<void> {
+  await window.getByTestId('view-menu-button').click();
+  const menu = window.locator('#view-menu');
+  await expect(menu).toBeVisible();
+  await menu.locator(`[data-menu-columns="${columns}"]`).click();
+}
 
 async function dragTab(window: Page, sourceTitle: string, targetTitle: string, targetRatio: number): Promise<void> {
   const source = window.locator('.tab', { hasText: sourceTitle });

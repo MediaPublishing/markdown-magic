@@ -1,11 +1,16 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from 'electron';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildFileTree, isEditablePath, isPathInside, listMarkdownFiles, TEXT_EXTENSIONS, writeFileAtomically } from './files';
+import { buildFileTree, isEditablePath, isPathInside, listMarkdownFiles, TEXT_EXTENSIONS, FileConflictError, writeFileAtomically } from './files';
+import { nativeText, setNativeLanguage } from './native-language';
 import { HistoryStore } from './history-store';
 import { WorkspaceStore } from './workspace-store';
+import { registerDocumentIpc } from './document-ipc';
+import { documentQueue } from './serial-queue';
+import type { IpcMainInvokeEvent } from 'electron';
+import type { RecoveryStore } from './recovery-store';
 import { createAssistantProposalId, createOfflineAssistantDraft, type AssistantChatMessage, type AssistantProposal } from '../shared/assistant';
 import { createCodexAssistantDraft, getCodexAssistantStatus, MAX_ASSISTANT_DOCUMENT_LENGTH } from './codex-assistant';
 import { openFile } from '../shared/workspace';
@@ -15,8 +20,16 @@ let mainWindow: BrowserWindow | null = null;
 let workspaceStore: WorkspaceStore | null = null;
 let historyStore: HistoryStore | null = null;
 const allowedRoots = new Set<string>();
+const loadedHashes = new Map<string, { mtimeMs: number; hash: string }>();
 const pendingOpenFiles = new Set<string>();
 let trustedRootsLoaded = false;
+let recoveryStore: RecoveryStore | null = null;
+let closeReady = false;
+let rendererInitialized = false;
+let closeApproved = false;
+let quitting = false;
+let pendingClose: string | null = null;
+const pendingMenuActions: string[] = [];
 
 const isMac = process.platform === 'darwin';
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -37,6 +50,7 @@ function openExternalUrl(url: string): void {
 function createWindow(): void {
   const productionRendererUrl = pathToFileURL(path.join(__dirname, '../dist-renderer/index.html')).href;
   const developmentRendererUrl = process.env.ELECTRON_RENDERER_URL;
+  rendererInitialized = false; closeReady = false; closeApproved = false; pendingClose = null;
   mainWindow = new BrowserWindow({
     width: 1360,
     height: 900,
@@ -77,8 +91,13 @@ function createWindow(): void {
   mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
-  mainWindow.webContents.on('did-finish-load', () => {
-    void sendPendingOpenFiles();
+  // The renderer explicitly acknowledges restored state before native intents are delivered.
+  mainWindow.on('close', (event) => {
+    if (closeApproved) return;
+    event.preventDefault();
+    if (pendingClose || !closeReady) return;
+    pendingClose = randomUUID();
+    mainWindow?.webContents.send('documents:before-close', pendingClose);
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -92,95 +111,118 @@ function createWindow(): void {
   }
 }
 
+function sendMenuAction(action: string): void {
+  if (!mainWindow) { pendingMenuActions.push(action); createWindow(); return; }
+  if (!rendererInitialized || mainWindow.webContents.isLoading()) pendingMenuActions.push(action);
+  else mainWindow.webContents.send('markdown-magic-menu', action);
+  mainWindow.show(); mainWindow.focus();
+}
+
 function buildMenu(): void {
   const menu = Menu.buildFromTemplate([
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
     {
-      label: 'Datei',
+      label: nativeText('Datei', 'File'),
       submenu: [
+        { label: nativeText('Neues Dokument', 'New Document'), accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new-document') },
         {
-          label: 'Ordner öffnen…',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'open-folder'),
-        },
-        {
-          label: 'Datei öffnen…',
+          label: nativeText('Ordner öffnen…', 'Open Folder…'),
           accelerator: 'CmdOrCtrl+Shift+O',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'open-file'),
+          click: () => sendMenuAction('open-folder'),
         },
         {
-          label: 'Speichern',
+          label: nativeText('Datei öffnen…', 'Open Document…'),
+          accelerator: 'CmdOrCtrl+O',
+          click: () => sendMenuAction('open-file'),
+        },
+        {
+          label: nativeText('Speichern', 'Save'),
           accelerator: 'CmdOrCtrl+S',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'save'),
+          click: () => sendMenuAction('save'),
         },
         {
-          label: 'Befehlspalette…',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'command-palette'),
+          label: nativeText('Sichern unter…', 'Save As…'), accelerator: 'CmdOrCtrl+Shift+S', click: () => sendMenuAction('save-as'),
+        },
+        { label: nativeText('Umbenennen…', 'Rename…'), click: () => sendMenuAction('rename-document') },
+        { label: nativeText('Bewegen…', 'Move…'), click: () => sendMenuAction('move-document') },
+        { label: nativeText('Duplizieren…', 'Duplicate…'), click: () => sendMenuAction('duplicate-document') },
+        { label: nativeText('Drucken…', 'Print…'), accelerator: 'CmdOrCtrl+P', click: () => sendMenuAction('print') },
+        { label: nativeText('Als PDF exportieren…', 'Export as PDF…'), click: () => sendMenuAction('export-pdf') },
+        {
+          label: nativeText('Befehlspalette…', 'Command Palette…'),
+          click: () => sendMenuAction('command-palette'),
         },
         {
-          label: 'Emoji-Panel…',
+          label: nativeText('Emoji-Panel…', 'Emoji Panel…'),
           accelerator: 'Alt+CmdOrCtrl+E',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'emoji-panel'),
+          click: () => sendMenuAction('emoji-panel'),
         },
         { type: 'separator' },
         {
-          label: 'Tab schliessen',
+          label: nativeText('Tab schließen', 'Close Tab'),
           accelerator: 'CmdOrCtrl+W',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'close-active-tab'),
+          click: () => sendMenuAction('close-active-tab'),
         },
         {
-          label: 'Gruppe schliessen',
+          label: nativeText('Gruppe schließen', 'Close Group'),
           accelerator: 'Shift+CmdOrCtrl+W',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'close-active-group'),
+          click: () => sendMenuAction('close-active-group'),
         },
         {
-          label: 'Tab wiederherstellen',
+          label: nativeText('Tab wiederherstellen', 'Reopen Closed Tab'),
           accelerator: 'Shift+CmdOrCtrl+T',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'restore-closed-tab'),
+          click: () => sendMenuAction('restore-closed-tab'),
         },
         { type: 'separator' },
         ...(isMac ? [] : [{ role: 'quit' as const }]),
       ],
     },
-    { role: 'editMenu' },
+    { label: nativeText('Bearbeiten', 'Edit'), submenu: [ { role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' },
+      { label: nativeText('Suchen…', 'Find…'), accelerator: 'CmdOrCtrl+F', click: () => sendMenuAction('find') },
+      { label: nativeText('Weitersuchen', 'Find Next'), accelerator: 'CmdOrCtrl+G', click: () => sendMenuAction('find-next') },
+      { label: nativeText('Einstellungen…', 'Settings…'), accelerator: 'CmdOrCtrl+,', click: () => sendMenuAction('settings') },
+    ] },
     {
-      label: 'Ansicht',
+      label: nativeText('Ansicht', 'View'),
       submenu: [
         {
-          label: 'Editor-Ansicht',
+          label: nativeText('Editor-Ansicht', 'Editor View'),
           accelerator: 'Alt+CmdOrCtrl+1',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'editor-view'),
+          click: () => sendMenuAction('editor-view'),
         },
         {
-          label: 'Seiten-Ansicht',
+          label: nativeText('Seiten-Ansicht', 'Page View'),
           accelerator: 'Alt+CmdOrCtrl+2',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'page-view'),
+          click: () => sendMenuAction('page-view'),
         },
         { type: 'separator' },
         {
-          label: 'Vergrössern',
+          label: nativeText('Vergrößern', 'Zoom In'),
           accelerator: 'CmdOrCtrl+=',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'zoom-in'),
+          click: () => sendMenuAction('zoom-in'),
         },
         {
-          label: 'Verkleinern',
+          label: nativeText('Verkleinern', 'Zoom Out'),
           accelerator: 'CmdOrCtrl+-',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'zoom-out'),
+          click: () => sendMenuAction('zoom-out'),
         },
         {
-          label: 'Zoom zurücksetzen',
+          label: nativeText('Zoom zurücksetzen', 'Actual Size'),
           accelerator: 'CmdOrCtrl+0',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'zoom-reset'),
+          click: () => sendMenuAction('zoom-reset'),
         },
       ],
     },
     { role: 'windowMenu' },
     {
-      label: 'Hilfe',
+      label: nativeText('Hilfe', 'Help'),
       submenu: [
         {
-          label: 'Tastaturkurzbefehle…',
-          click: () => mainWindow?.webContents.send('markdown-magic-menu', 'shortcuts'),
+          label: nativeText('Nach Updates suchen…', 'Check for Updates…'), click: () => sendMenuAction('check-updates'),
+        },
+        {
+          label: nativeText('Tastaturkurzbefehle…', 'Keyboard Shortcuts…'),
+          click: () => sendMenuAction('shortcuts'),
         },
       ],
     },
@@ -188,8 +230,37 @@ function buildMenu(): void {
   Menu.setApplicationMenu(menu);
 }
 
+function handleTrusted(channel: string, handler: (event: IpcMainInvokeEvent, ...args: any[]) => unknown): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame) return { ok: false, error: 'Unzulässiger Zugriff.' };
+    return handler(event, ...args);
+  });
+}
+
 function registerIpc(): void {
-  ipcMain.handle('workspace:load', async () => {
+  handleTrusted('app:renderer-ready', async () => {
+    rendererInitialized = true;
+    await sendPendingOpenFiles();
+    for (const action of pendingMenuActions.splice(0)) mainWindow?.webContents.send('markdown-magic-menu', action);
+    return { ok: true };
+  });
+  handleTrusted('app:language', async (_event, language: unknown) => {
+    if (language !== 'de' && language !== 'en') return { ok: false, error: 'Invalid language.' };
+    setNativeLanguage(language); buildMenu();
+    try { await writeFileAtomically(path.join(app.getPath('userData'), 'app-language.json'), JSON.stringify({ language })); return { ok: true }; } catch (error) { return failure(error); }
+  });
+  recoveryStore = registerDocumentIpc({ window: () => mainWindow, store: getStore, history: getHistory, requireDocument: requireMarkdownInsideAllowedRoots, requireExisting: requireExistingPathInsideAllowedRoots, allowDirectory: registerAllowedRoot, userData: app.getPath('userData'), rememberSaved: (filePath, content, mtimeMs) => loadedHashes.set(filePath, { mtimeMs, hash: createHash('sha256').update(content).digest('hex') }) }).recovery;
+  ipcMain.on('documents:close-ready', (event) => { if (event.sender === mainWindow?.webContents) closeReady = true; });
+  ipcMain.on('documents:close-response', async (event, id: unknown, result: unknown) => {
+    if (event.sender !== mainWindow?.webContents || typeof id !== 'string' || id !== pendingClose) return;
+    pendingClose = null;
+    if (!result || typeof result !== 'object' || (result as OperationResult).ok !== true) { quitting = false; return; }
+    try {
+      await documentQueue.flush(); await getStore().flush(); await recoveryStore?.flush();
+      closeApproved = true; mainWindow?.close(); if (quitting) app.quit();
+    } catch (error) { quitting = false; if (mainWindow) void dialog.showMessageBox(mainWindow, { type: 'error', message: 'Das Dokument konnte nicht gesichert werden.', detail: error instanceof Error ? error.message : String(error) }); }
+  });
+  handleTrusted('workspace:load', async () => {
     const store = getStore();
     let state = await store.load();
     const hadTrustedRoots = await restoreTrustedRoots();
@@ -219,18 +290,13 @@ function registerIpc(): void {
         const canonicalPath = await requireExistingMarkdownInsideAllowedRoots(tab.path);
         if (canonicalPath === tab.path) return tab;
         tabsChanged = true;
-        return { ...tab, id: `tab-${encodeURIComponent(canonicalPath)}`, path: canonicalPath };
+        return { ...tab, path: canonicalPath };
       } catch {
         return tab;
       }
     }));
     if (tabsChanged) {
-      const activeTabTitle = state.tabs.find((tab) => tab.id === state.activeTabId)?.title;
       state = { ...state, tabs };
-      if (activeTabTitle) {
-        const activeTab = state.tabs.find((tab) => tab.title === activeTabTitle);
-        if (activeTab && activeTab.id !== state.activeTabId) state = { ...state, activeTabId: activeTab.id };
-      }
       await store.save(state);
     }
     // A Home-folder default must never trigger a recursive startup scan.
@@ -240,9 +306,9 @@ function registerIpc(): void {
     return { state, files, onboardingRequired };
   });
 
-  ipcMain.handle('workspace:get-state', async () => (await getStore().load()));
+  handleTrusted('workspace:get-state', async () => (await getStore().load()));
 
-  ipcMain.handle('onboarding:complete', async (): Promise<OperationResult> => {
+  handleTrusted('onboarding:complete', async (): Promise<OperationResult> => {
     try {
       await fs.writeFile(path.join(app.getPath('userData'), 'onboarding-complete'), '1', 'utf8');
       return { ok: true };
@@ -251,7 +317,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('workspace:save', async (_event, state: WorkspaceState): Promise<OperationResult> => {
+  handleTrusted('workspace:save', async (_event, state: WorkspaceState): Promise<OperationResult> => {
     try {
       if (state.rootPath) await requireDirectoryInsideAllowedRoots(state.rootPath);
       for (const tab of state.tabs) await requireMarkdownInsideAllowedRoots(tab.path);
@@ -262,32 +328,30 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:choose-folder', async (): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
+  handleTrusted('files:choose-folder', async (): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
     if (!mainWindow) return { ok: false, error: 'Kein Fenster geöffnet.' };
     const selected = await dialog.showOpenDialog(mainWindow, {
-      title: 'Markdown-Ordner wählen',
+      title: nativeText('Ordner öffnen', 'Open Folder'),
       properties: ['openDirectory'],
-      buttonLabel: 'Diesen Ordner verwenden',
+      buttonLabel: nativeText('Diesen Ordner verwenden', 'Use This Folder'),
     });
     if (selected.canceled || selected.filePaths.length === 0) return { ok: false };
     try {
       const rootPath = await registerAllowedRoot(selected.filePaths[0]!);
       const store = getStore();
-      const previous = await store.load();
-      const nextState: WorkspaceState = { ...previous, rootPath, tabs: [], activeTabId: null };
+      const nextState = await store.update((previous) => ({ ...previous, rootPath }));
       const files: FileEntry[] = [];
-      await store.save(nextState);
       return { ok: true, state: nextState, files };
     } catch (error) {
       return failure(error);
     }
   });
 
-  ipcMain.handle('files:choose-document', async (): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
+  handleTrusted('files:choose-document', async (): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
     if (!mainWindow) return { ok: false, error: 'Kein Fenster geöffnet.' };
     const selected = await dialog.showOpenDialog(mainWindow, {
-      title: 'Markdown-Datei öffnen',
-      properties: ['openFile'],
+      title: nativeText('Dokumente öffnen', 'Open Documents'),
+      properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Text und Markdown', extensions: TEXT_EXTENSIONS.map((extension) => extension.slice(1)) }],
     });
     if (selected.canceled || selected.filePaths.length === 0) return { ok: false };
@@ -298,22 +362,20 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:switch-folder', async (_event, requestedPath: string): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
+  handleTrusted('files:switch-folder', async (_event, requestedPath: string): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }> => {
     try {
       if (typeof requestedPath !== 'string') throw new Error('Ungültiger Arbeitsordner.');
       const rootPath = await requireTrustedRoot(requestedPath);
       const store = getStore();
-      const previous = await store.load();
-      const nextState: WorkspaceState = { ...previous, rootPath, tabs: [], activeTabId: null };
+      const nextState = await store.update((previous) => ({ ...previous, rootPath }));
       const files: FileEntry[] = [];
-      await store.save(nextState);
       return { ok: true, state: nextState, files };
     } catch (error) {
       return failure(error);
     }
   });
 
-  ipcMain.handle('onboarding:create-sample', async (_event, rootPath?: string): Promise<OperationResult & { path?: string; files?: FileEntry[]; state?: WorkspaceState }> => {
+  handleTrusted('onboarding:create-sample', async (_event, rootPath?: string): Promise<OperationResult & { path?: string; files?: FileEntry[]; state?: WorkspaceState }> => {
     try {
       const requestedParent = typeof rootPath === 'string' && rootPath
         ? rootPath
@@ -324,17 +386,11 @@ function registerIpc(): void {
       await fs.mkdir(sampleRoot, { recursive: true });
       const welcomePath = path.join(sampleRoot, 'Willkommen.md');
       const notesPath = path.join(sampleRoot, 'Notizen.md');
-      await fs.writeFile(path.join(sampleRoot, 'notizen.txt'), 'Markdown Magic öffnet lokale Textdateien und Markdown-Dokumente in derselben Bearbeitungsfläche.\n', 'utf8');
-      await writeFileAtomically(welcomePath, '# Willkommen\n\nMarkdown Magic öffnet lokale Textdateien und bearbeitet sie direkt als Seite.\n\n## Erster Erfolg\n\nSchreibe hier einen Satz. Jede Änderung bleibt in deiner Datei.\n');
-      await writeFileAtomically(notesPath, '# Notizen\n\n- Ordner bleiben die Wahrheit\n- Tabs gruppieren die laufende Arbeit\n- Der Assistent schlägt Änderungen nur als Diff vor\n');
+      await fs.writeFile(path.join(sampleRoot, 'notizen.txt'), 'Markdown Magic öffnet lokale Textdateien und Markdown-Dokumente in derselben Bearbeitungsfläche.\n', { flag: 'wx' }).catch((error) => { if (error.code !== 'EEXIST') throw error; });
+      await writeSampleIfMissing(welcomePath, '# Willkommen\n\nMarkdown Magic öffnet lokale Textdateien und bearbeitet sie direkt als Seite.\n\n## Erster Erfolg\n\nSchreibe hier einen Satz. Jede Änderung bleibt in deiner Datei.\n');
+      await writeSampleIfMissing(notesPath, '# Notizen\n\n- Ordner bleiben die Wahrheit\n- Tabs gruppieren die laufende Arbeit\n- Der Assistent schlägt Änderungen nur als Diff vor\n');
       await registerAllowedRoot(sampleRoot);
-      const nextState: WorkspaceState = {
-        version: 1,
-        rootPath: sampleRoot,
-        groups: [],
-        tabs: [],
-        activeTabId: null,
-      };
+      const nextState: WorkspaceState = { ...await getStore().load(), rootPath: sampleRoot };
       await getStore().save(nextState);
       const files = await listMarkdownFiles(sampleRoot);
       return { ok: true, path: sampleRoot, files, state: nextState };
@@ -343,9 +399,9 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('assistant:status', async (_event, forceRefresh = false) => getCodexAssistantStatus({ forceStatusRefresh: forceRefresh === true }));
+  handleTrusted('assistant:status', async (_event, forceRefresh = false) => getCodexAssistantStatus({ forceStatusRefresh: forceRefresh === true }));
 
-  ipcMain.handle('assistant:propose', async (_event, prompt: string, markdown: string, documentTitle: string, history: AssistantChatMessage[] = []): Promise<OperationResult & { reply?: string; proposal?: AssistantProposal }> => {
+  handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, documentTitle: string, history: AssistantChatMessage[] = []): Promise<OperationResult & { reply?: string; proposal?: AssistantProposal }> => {
     try {
       if (typeof prompt !== 'string' || prompt.length > 2000) throw new Error('Ungültiger Assistentenauftrag.');
       if (typeof markdown !== 'string' || markdown.length > MAX_ASSISTANT_DOCUMENT_LENGTH) throw new Error('Das Dokument ist für den Assistenten zu gross.');
@@ -429,7 +485,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:list', async (_event, rootPath: string): Promise<OperationResult & { files?: FileEntry[] }> => {
+  handleTrusted('files:list', async (_event, rootPath: string): Promise<OperationResult & { files?: FileEntry[] }> => {
     try {
       const safeRootPath = await requireDirectoryInsideAllowedRoots(rootPath);
       return { ok: true, files: await listMarkdownFiles(safeRootPath) };
@@ -438,7 +494,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:tree', async (_event, rootPath: string): Promise<OperationResult & { tree?: import('../shared/types').FileSystemNode }> => {
+  handleTrusted('files:tree', async (_event, rootPath: string): Promise<OperationResult & { tree?: import('../shared/types').FileSystemNode }> => {
     try {
       const safeRootPath = await requireDirectoryInsideAllowedRoots(rootPath);
       return { ok: true, tree: await buildFileTree(safeRootPath) };
@@ -447,17 +503,18 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:read', async (_event, filePath: string): Promise<OperationResult & { file?: { content: string; mtimeMs: number } }> => {
+  handleTrusted('files:read', async (_event, filePath: string): Promise<OperationResult & { file?: { content: string; mtimeMs: number } }> => {
     try {
       const safePath = await requireMarkdownInsideAllowedRoots(filePath);
       const [content, stats] = await Promise.all([fs.readFile(safePath, 'utf8'), fs.stat(safePath)]);
+      loadedHashes.set(safePath, { mtimeMs: Math.round(stats.mtimeMs), hash: createHash('sha256').update(content).digest('hex') });
       return { ok: true, file: { content, mtimeMs: Math.round(stats.mtimeMs) } };
     } catch (error) {
       return failure(error);
     }
   });
 
-  ipcMain.handle('files:stat', async (_event, filePath: string): Promise<OperationResult & { mtimeMs?: number }> => {
+  handleTrusted('files:stat', async (_event, filePath: string): Promise<OperationResult & { mtimeMs?: number }> => {
     try {
       const safePath = await requireMarkdownInsideAllowedRoots(filePath);
       const stats = await fs.stat(safePath);
@@ -467,7 +524,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:stat-many', async (_event, paths: string[]): Promise<OperationResult & { statuses?: import('../shared/types').FileStatus[] }> => {
+  handleTrusted('files:stat-many', async (_event, paths: string[]): Promise<OperationResult & { statuses?: import('../shared/types').FileStatus[] }> => {
     try {
       if (!Array.isArray(paths) || paths.some((item) => typeof item !== 'string')) throw new Error('Ungültige Dateiliste.');
       const uniquePaths = [...new Set(paths)].slice(0, 200);
@@ -476,9 +533,9 @@ function registerIpc(): void {
           const safePath = await requireMarkdownInsideAllowedRoots(requestedPath);
           const stats = await fs.stat(safePath);
           return { path: safePath, exists: true, mtimeMs: Math.round(stats.mtimeMs) };
-        } catch {
-          // Missing files are valid conflict states; inaccessible or rejected paths stay unknown.
-          return { path: requestedPath, exists: false };
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { path: requestedPath, exists: false };
+          throw error;
         }
       }));
       return { ok: true, statuses };
@@ -487,24 +544,33 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('files:write', async (_event, filePath: string, content: string, expectedMtimeMs?: number): Promise<OperationResult & { mtimeMs?: number }> => {
+  handleTrusted('files:write', async (_event, filePath: string, content: string, expectedMtimeMs?: number): Promise<OperationResult & { mtimeMs?: number }> => {
     try {
       if (typeof content !== 'string') throw new Error('Ungültiger Dateiinhalt.');
       const safePath = await requireMarkdownInsideAllowedRoots(filePath);
-      const previousStats = await fs.stat(safePath).catch(() => null);
-      const previousContent = previousStats?.isFile() ? await fs.readFile(safePath, 'utf8') : null;
-      await writeFileAtomically(safePath, content, expectedMtimeMs);
-      const stats = await fs.stat(safePath);
-      if (previousContent !== null && previousContent !== content) {
-        await getHistory().record(safePath, previousContent, Math.round(previousStats!.mtimeMs), 'save');
-      }
-      return { ok: true, mtimeMs: Math.round(stats.mtimeMs) };
+      if (expectedMtimeMs !== undefined && (typeof expectedMtimeMs !== 'number' || !Number.isFinite(expectedMtimeMs))) throw new Error('Ungültige Dateiversion.');
+      return await documentQueue.run(safePath, async () => {
+        // Autosave never recreates a deleted/moved file; Save As is the explicit recovery route.
+        const previousStats = await fs.stat(safePath);
+        const previousContent = await fs.readFile(safePath, 'utf8');
+        if (expectedMtimeMs !== undefined && Math.round(previousStats.mtimeMs) !== expectedMtimeMs) throw new FileConflictError();
+        const currentHash = createHash('sha256').update(previousContent).digest('hex');
+        const loaded = loadedHashes.get(safePath);
+        if (expectedMtimeMs !== undefined && loaded?.mtimeMs === expectedMtimeMs && loaded.hash !== currentHash) throw new FileConflictError();
+        if (previousContent !== content) {
+          await getHistory().record(safePath, previousContent, Math.round(previousStats.mtimeMs), 'save');
+          await writeFileAtomically(safePath, content, Math.round(previousStats.mtimeMs), currentHash);
+        }
+        const mtimeMs = Math.round((await fs.stat(safePath)).mtimeMs);
+        loadedHashes.set(safePath, { mtimeMs, hash: createHash('sha256').update(content).digest('hex') });
+        return { ok: true, mtimeMs };
+      });
     } catch (error) {
       return failure(error);
     }
   });
 
-  ipcMain.handle('history:list', async (_event, filePath: string): Promise<OperationResult & { entries?: import('../shared/types').HistoryEntry[] }> => {
+  handleTrusted('history:list', async (_event, filePath: string): Promise<OperationResult & { entries?: import('../shared/types').HistoryEntry[] }> => {
     try {
       const safePath = await requireMarkdownInsideAllowedRoots(filePath);
       return { ok: true, entries: await getHistory().list(safePath) };
@@ -513,7 +579,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('history:record-assistant', async (_event, filePath: string, content: string, mtimeMs: number): Promise<OperationResult & { entryId?: string }> => {
+  handleTrusted('history:record-assistant', async (_event, filePath: string, content: string, mtimeMs: number): Promise<OperationResult & { entryId?: string }> => {
     try {
       if (typeof content !== 'string') throw new Error('Ungültiger Checkpoint-Inhalt.');
       if (typeof mtimeMs !== 'number' || !Number.isFinite(mtimeMs)) throw new Error('Ungültige Checkpoint-Zeit.');
@@ -525,18 +591,18 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('history:restore', async (_event, filePath: string, entryId: string): Promise<OperationResult & { content?: string; mtimeMs?: number }> => {
+  handleTrusted('history:restore', async (_event, filePath: string, entryId: string): Promise<OperationResult & { content?: string; mtimeMs?: number }> => {
     try {
       if (typeof entryId !== 'string') throw new Error('Ungültiger Historieneintrag.');
       const safePath = await requireMarkdownInsideAllowedRoots(filePath);
-      const result = await getHistory().restore(safePath, entryId);
+      const result = await documentQueue.run(safePath, () => getHistory().restore(safePath, entryId));
       return { ok: true, content: result.content, mtimeMs: result.mtimeMs };
     } catch (error) {
       return failure(error);
     }
   });
 
-  ipcMain.handle('files:create', async (_event, rootPath: string, fileNameInput: string): Promise<OperationResult & { path?: string }> => {
+  handleTrusted('files:create', async (_event, rootPath: string, fileNameInput: string): Promise<OperationResult & { path?: string }> => {
     try {
       if (typeof fileNameInput !== 'string') throw new Error('Ungültiger Dateiname.');
       const safeRootPath = await requireDirectoryInsideAllowedRoots(rootPath);
@@ -555,7 +621,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('shell:reveal', async (_event, filePath: string): Promise<OperationResult> => {
+  handleTrusted('shell:reveal', async (_event, filePath: string): Promise<OperationResult> => {
     try {
       if (typeof filePath !== 'string') throw new Error('Ungültiger Dateipfad.');
       const canonicalTarget = await requireExistingPathInsideAllowedRoots(filePath);
@@ -571,7 +637,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('app:emoji-panel', (): OperationResult => {
+  handleTrusted('app:emoji-panel', (): OperationResult => {
     try {
       if (typeof app.showEmojiPanel !== 'function') throw new Error('Emoji-Panel wird von diesem System nicht unterstützt.');
       app.showEmojiPanel();
@@ -581,7 +647,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('recent:resolve', async (_event, requestedPath: string): Promise<OperationResult & { path?: string; name?: string }> => {
+  handleTrusted('recent:resolve', async (_event, requestedPath: string): Promise<OperationResult & { path?: string; name?: string }> => {
     try {
       if (typeof requestedPath !== 'string') throw new Error('Ungültiger Dateipfad.');
       const safePath = await requireExistingMarkdownInsideAllowedRoots(requestedPath);
@@ -591,7 +657,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle('app:reveal', async (): Promise<OperationResult> => {
+  handleTrusted('app:reveal', async (): Promise<OperationResult> => {
     try {
       shell.showItemInFolder(process.execPath);
       return { ok: true };
@@ -599,6 +665,10 @@ function registerIpc(): void {
       return failure(error);
     }
   });
+}
+
+async function writeSampleIfMissing(filePath: string, content: string): Promise<void> {
+  await fs.writeFile(filePath, content, { flag: 'wx' }).catch((error) => { if (error.code !== 'EEXIST') throw error; });
 }
 
 function getStore(): WorkspaceStore {
@@ -627,13 +697,12 @@ async function openMarkdownFiles(requestedPaths: string[]): Promise<OperationRes
   if (candidates.length === 0) throw new Error('Keine öffnbare Markdown-Datei gefunden.');
 
   const store = getStore();
-  const previousState = await store.load();
-  if (previousState.rootPath) await requireTrustedRoot(previousState.rootPath);
-  let nextState: WorkspaceState = previousState;
-  for (const filePath of candidates) nextState = openFile(nextState, filePath);
-  nextState = { ...nextState, activeTabId: nextState.tabs.at(-1)?.id ?? null };
+  const nextState = await store.update((previous) => {
+    let next = previous;
+    for (const filePath of candidates) next = openFile(next, filePath);
+    return next;
+  });
   const files: FileEntry[] = [];
-  await store.save(nextState);
   return { ok: true, state: nextState, files };
 }
 
@@ -644,7 +713,7 @@ function queueOpenFile(filePath: string): void {
 }
 
 async function sendPendingOpenFiles(): Promise<void> {
-  if (!mainWindow || pendingOpenFiles.size === 0) return;
+  if (!mainWindow || !rendererInitialized || pendingOpenFiles.size === 0) return;
   const paths = [...pendingOpenFiles];
   pendingOpenFiles.clear();
   try {
@@ -691,7 +760,7 @@ async function restoreTrustedRoots(): Promise<boolean> {
 async function persistTrustedRoots(): Promise<void> {
   const filePath = path.join(app.getPath('userData'), 'trusted-roots.json');
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await writeFileAtomically(filePath, `${JSON.stringify([...allowedRoots].sort(), null, 2)}\n`);
+  await documentQueue.run('trusted-roots', () => writeFileAtomically(filePath, `${JSON.stringify([...allowedRoots].sort(), null, 2)}\n`));
 }
 
 async function registerAllowedRoot(rootPath: string, persist = true): Promise<string> {
@@ -770,7 +839,7 @@ async function findExistingAncestor(targetPath: string): Promise<string> {
 }
 
 function failure(error: unknown): OperationResult {
-  return { ok: false, error: error instanceof Error ? error.message : 'Unbekannter Fehler.' };
+  return { ok: false, error: error instanceof Error ? error.message : 'Unbekannter Fehler.', ...(error instanceof FileConflictError ? { conflict: true } : {}) };
 }
 
 for (const argument of process.argv.slice(1)) {
@@ -780,14 +849,19 @@ for (const argument of process.argv.slice(1)) {
 app.on('open-file', (event, filePath) => {
   event.preventDefault();
   queueOpenFile(filePath);
+  if (app.isReady() && !mainWindow) createWindow();
+  mainWindow?.show(); mainWindow?.focus();
   if (app.isReady() && mainWindow?.webContents.isLoading() === false) void sendPendingOpenFiles();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const userDataDirectory = process.env.MARKDOWN_MAGIC_USER_DATA_DIR ?? process.env.ATELIER_USER_DATA_DIR;
   const homeDirectory = process.env.MARKDOWN_MAGIC_HOME_DIR ?? process.env.ATELIER_HOME_DIR;
   if (userDataDirectory) app.setPath('userData', userDataDirectory);
   if (homeDirectory) app.setPath('home', homeDirectory);
+  let language: 'de' | 'en' = app.getLocale().startsWith('de') ? 'de' : 'en';
+  try { const settings = JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'app-language.json'), 'utf8')); if (settings.language === 'de' || settings.language === 'en') language = settings.language; } catch {}
+  setNativeLanguage(language);
   registerIpc();
   buildMenu();
   createWindow();
@@ -796,6 +870,10 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('before-quit', (event) => {
+  if (mainWindow && !closeApproved) { event.preventDefault(); quitting = true; mainWindow.close(); }
 });
 
 app.on('window-all-closed', () => {

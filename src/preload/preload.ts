@@ -1,7 +1,31 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { MarkdownMagicBridge, WorkspaceState } from '../shared/types';
 
 const bridge: MarkdownMagicBridge = {
+  rendererReady: () => ipcRenderer.invoke('app:renderer-ready'),
+  setAppLanguage: (language) => ipcRenderer.invoke('app:language', language),
+  createDraft: () => ipcRenderer.invoke('drafts:create'),
+  listDrafts: () => ipcRenderer.invoke('drafts:list'),
+  discardDraft: (path) => ipcRenderer.invoke('drafts:discard', path),
+  writeRecovery: (snapshot) => ipcRenderer.invoke('recovery:write', snapshot),
+  readRecovery: (id) => ipcRenderer.invoke('recovery:read', id),
+  clearRecovery: (id, revision) => ipcRenderer.invoke('recovery:clear', id, revision),
+  saveDocumentAs: (request) => ipcRenderer.invoke('documents:save-as', request),
+  getPathForFile: (file) => { const path = webUtils.getPathForFile(file); if (path) ipcRenderer.send('documents:authorize-image', path); return path; },
+  importImage: (path, source) => ipcRenderer.invoke('documents:import-image', path, source),
+  readHistory: (path, id) => ipcRenderer.invoke('history:read', path, id),
+  updateDocumentWindow: (path, dirty) => ipcRenderer.invoke('documents:window', path, dirty),
+  printDocument: (html, title, pdf) => ipcRenderer.invoke('documents:print', html, title, pdf),
+  onBeforeClose: (listener) => {
+    const wrapped = async (_event: unknown, requestId: unknown) => {
+      if (typeof requestId !== 'string') return;
+      try { ipcRenderer.send('documents:close-response', requestId, await listener()); }
+      catch (error) { ipcRenderer.send('documents:close-response', requestId, { ok: false, error: String(error) }); }
+    };
+    ipcRenderer.on('documents:before-close', wrapped);
+    ipcRenderer.send('documents:close-ready');
+    return () => ipcRenderer.removeListener('documents:before-close', wrapped);
+  },
   loadWorkspace: () => ipcRenderer.invoke('workspace:load'),
   completeOnboarding: () => ipcRenderer.invoke('onboarding:complete'),
   getState: () => ipcRenderer.invoke('workspace:get-state'),
@@ -28,7 +52,7 @@ const bridge: MarkdownMagicBridge = {
   switchToFolder: (path: string) => ipcRenderer.invoke('files:switch-folder', path),
   onMenuAction: (listener) => {
     const wrapped = (_event: unknown, action: unknown) => {
-      const allowedActions = ['open-folder', 'open-file', 'save', 'editor-view', 'page-view', 'zoom-in', 'zoom-out', 'zoom-reset', 'close-active-tab', 'close-active-group', 'restore-closed-tab', 'command-palette', 'emoji-panel', 'shortcuts'] as const;
+      const allowedActions = ['new-document', 'save-as', 'find', 'find-next', 'print', 'export-pdf', 'rename-document', 'move-document', 'duplicate-document', 'settings', 'check-updates', 'open-folder', 'open-file', 'save', 'editor-view', 'page-view', 'zoom-in', 'zoom-out', 'zoom-reset', 'close-active-tab', 'close-active-group', 'restore-closed-tab', 'command-palette', 'emoji-panel', 'shortcuts'] as const;
       if (allowedActions.includes(action as typeof allowedActions[number])) listener(action as typeof allowedActions[number]);
     };
     ipcRenderer.on('markdown-magic-menu', wrapped);

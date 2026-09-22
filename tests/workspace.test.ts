@@ -21,7 +21,7 @@ const group: TabGroup = {
 describe('workspace model', () => {
   it('normalizes malformed persisted data into a safe empty workspace', () => {
     const state = normalizeState({ version: 99, tabs: 'bad', groups: [{}] });
-    expect(state).toEqual({ version: 1, rootPath: null, groups: [], tabs: [], activeTabId: null });
+    expect(state).toEqual({ version: 2, rootPath: null, groups: [], tabs: [], activeTabId: null });
   });
 
   it('opens the same document only once and focuses its existing tab', () => {

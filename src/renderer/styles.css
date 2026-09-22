@@ -549,3 +549,144 @@ body.is-pointer-dragging { cursor: grabbing; user-select: none; }
 .language-option { display: grid; place-items: center; min-height: 34px; margin: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
 .language-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .language-option.active { background: color-mix(in oklch, var(--accent) 18%, var(--panel)); color: var(--accent); }
+
+/* Document-first 0.2 shell: title, optional tabs and compact formatting. */
+#app { --sidebar-width: 230px; }
+.sidebar-header { padding: 8px 12px 6px; gap: 8px; }
+.brand-row { margin-bottom: 5px; }
+.brand-lockup { height: 30px; }
+.brand-mark { width: 23px; height: 23px; }
+.brand-word, .brand-magic { font-size: 13px; font-style: normal; font-weight: 600; color: var(--muted); }
+.library-navigation { display: grid; gap: 3px; margin: 14px 0 10px; }
+.library-button { display: flex; align-items: center; gap: 10px; min-height: 35px; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.library-button:hover, .library-document:hover { background: var(--hover); }
+.library-button.active, .library-document.active { background: var(--selected); color: var(--link); }
+.library-document { display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 36px; padding: 9px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer; }
+.library-document > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.library-document small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.library-document svg { flex-shrink: 0; margin-top: 3px; color: var(--muted); }
+.sidebar-footer .ghost-action { justify-content: flex-start; border: 0; }
+.workspace { display: flex; flex-direction: column; }
+.workspace-top { flex: 0 0 auto; min-height: 56px; align-items: center; gap: 4px; padding-right: 12px; }
+.workspace-top .document-header { flex: 1; min-width: 0; border: 0; min-height: 56px; padding: 7px 12px 7px 20px; }
+.document-heading { min-width: 0; gap: 0; }
+.document-title { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; font: 600 14px/1.4 system-ui; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.document-title:hover { color: var(--link); }
+.document-save-state { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.document-breadcrumb { display: none; }
+.document-actions { gap: 4px; flex-shrink: 0; }
+.document-actions > [data-action="new-file"], .document-actions > [data-action="reload"], .document-actions > [data-action="history"], .document-actions > [data-action="save"], .document-actions > .view-controls { display: none; }
+.workspace-language, .workspace-theme, .workspace-settings { display: none; }
+.workspace-assistant { flex: 0 0 auto; }
+.group-rail:not(.hidden) { order: -1; max-width: 35%; min-width: 0; }
+.tab-strip { min-height: 34px; flex: 0 0 auto; }
+.tab { min-height: 33px; }
+.tab-strip.hidden, .group-rail.hidden { display: none; }
+.editor-toolbar-slot { flex: 0 0 auto; }
+.editor-toolbar-slot.milkdown .milkdown-top-bar { min-height: 39px; }
+.document-area { flex: 1; min-height: 0; }
+.document-session { min-height: 100%; }
+.document-footer { display: flex; justify-content: space-between; gap: 12px; flex: 0 0 auto; padding: 7px 20px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); background: var(--panel); }
+.empty-state { inset: 0; pointer-events: auto; padding: 24px; }
+.welcome-copy { width: min(440px, 100%); text-align: left; }
+.welcome-copy h2 { margin: 17px 0 8px; font-size: 27px; line-height: 1.25; font-weight: 600; letter-spacing: -.02em; }
+.welcome-copy p { max-width: 38ch; font-size: 15px; line-height: 1.6; }
+.welcome-icon svg { width: 36px; height: 36px; color: var(--muted); stroke-width: 1.4; }
+.welcome-actions { display: flex; flex-direction: column; gap: 9px; align-items: stretch; max-width: 320px; margin-top: 28px; }
+.welcome-actions button { min-height: 38px; justify-content: flex-start; }
+.welcome-actions kbd { margin-left: auto; opacity: .7; font-size: 11px; }
+.welcome-recents { margin-top: 28px; max-height: 170px; overflow: auto; }
+.welcome-recents .tree-heading { padding-inline: 0; }
+.welcome-recents .recent-row { text-align: left; }
+.no-document .document-actions, .no-document .document-footer, .no-document .workspace-assistant { visibility: hidden; }
+.no-document .editor-toolbar-slot { display: none; }
+.find-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 0 0 auto; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--chrome); }
+.find-bar input { min-width: 90px; flex: 1; width: 120px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--panel); }
+.find-count { font-size: 11px; min-width: 36px; color: var(--muted); }
+.find-bar .ghost-action { min-height: 29px; padding-inline: 8px; font-size: 12px; }
+.outline-panel { position: absolute; z-index: 8; top: 10px; right: 12px; width: min(280px, 80%); max-height: 70%; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px var(--shadow-color); background: var(--panel); }
+.outline-heading { display: flex; justify-content: space-between; align-items: center; }
+.outline-item { display: block; width: 100%; border: 0; padding: 8px 7px 8px calc(7px + (var(--heading-level) - 1) * 10px); background: transparent; text-align: left; cursor: pointer; }
+.outline-item:hover { background: var(--hover); }
+.document-menu { max-height: calc(100vh - 85px); overflow: auto; min-width: 225px; }
+.comparison-dialog { width: min(1000px, calc(100vw - 48px)); max-width: none; }
+.comparison-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; min-height: 0; }
+.comparison-columns section { min-width: 0; }
+.comparison-columns h3 { font-size: 13px; }
+.comparison-columns pre, .history-preview { max-height: 50vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, monospace; padding: 12px; background: var(--chrome); border: 1px solid var(--line); border-radius: 5px; }
+.history-dialog { width: min(820px, calc(100vw - 48px)); max-width: none; }
+.statusbar.is-error { max-width: calc(100% - 28px); }
+.statusbar.is-error .status-message { white-space: normal; }
+#app.assistant-open .workspace { grid-template-columns: none; }
+@media (max-width: 1000px) {
+  #app { --sidebar-width: 210px; }
+  .workspace-top .document-header { padding-left: 13px; gap: 6px; }
+  .zoom-controls { display: none; }
+  .document-title { font-size: 13px; }
+  .group-rail:not(.hidden) { max-width: 25%; }
+  .editor-toolbar-slot.milkdown .milkdown-top-bar .top-bar-inner { justify-content: flex-start; }
+  .comparison-columns { grid-template-columns: 1fr; }
+  .comparison-columns pre { max-height: 25vh; }
+}
+.editor-host.page-view > .document-session { display: none; }
+.history-preview-actions[hidden] { display: none; }
+.document-title:focus-visible, .library-button:focus-visible, .library-document:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Lossless source mode shares the document's scale and theme. */
+.source-document-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - 155px);
+  padding-bottom: 24px;
+}
+.source-editor-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.source-editor-label strong { color: var(--ink); font-weight: 600; }
+.source-editor-input {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 55vh;
+  padding: 14px 16px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  caret-color: var(--ink);
+  font: calc(var(--document-font-size) * .86)/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  tab-size: 2;
+  overflow-wrap: normal;
+}
+.source-editor-input:focus-visible { border-color: var(--accent); outline: 2px solid color-mix(in oklch, var(--accent) 35%, transparent); outline-offset: 2px; }
+
+/* Keep the document typography consistent with the surrounding Mac workspace. */
+.preview-label.hidden, .editor-toolbar-slot:empty { display: none; }
+.tab:not(.missing) .color-dot.neutral { display: none; }
+.document-editor .milkdown {
+  --crepe-font-title: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --crepe-font-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: var(--ink);
+}
+.document-editor .milkdown .ProseMirror { max-width: calc(640px * var(--document-scale, 1)); font-size: var(--document-font-size) !important; width: 100%; margin-inline: auto; padding: 24px 0; font-family: var(--crepe-font-default); color: var(--ink); }
+.document-editor .milkdown .ProseMirror h1 { font-size: calc(32px * var(--document-scale, 1)); line-height: 1.25; font-weight: 650; margin: 0 0 24px; }
+.document-editor .milkdown .ProseMirror h2 { font-size: calc(24px * var(--document-scale, 1)); line-height: 1.35; font-weight: 600; margin: 32px 0 12px; }
+.document-editor .milkdown .ProseMirror h3 { font-size: calc(20px * var(--document-scale, 1)); line-height: 1.4; font-weight: 600; margin: 24px 0 10px; }
+
+.page-preview-sheet > .milkdown {
+  --crepe-font-title: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --crepe-font-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.page-preview-sheet .milkdown .page-preview-content h1 { font-size: calc(32px * var(--document-scale, 1)); line-height: 1.25; font-weight: 650; margin: 0 0 24px; }
+.page-preview-sheet .milkdown .page-preview-content h2 { font-size: calc(24px * var(--document-scale, 1)); line-height: 1.35; font-weight: 600; margin: 28px 0 12px; }
+.page-preview-sheet .milkdown .page-preview-content h3 { font-size: calc(20px * var(--document-scale, 1)); line-height: 1.4; font-weight: 600; margin: 24px 0 10px; }

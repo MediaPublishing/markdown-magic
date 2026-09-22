@@ -10,6 +10,7 @@ asar: true
 electronDist: node_modules/electron/dist
 afterPack: scripts/after-pack.cjs
 mac:
+  artifactName: Markdown-Magic-${version}-${arch}.${ext}
   category: public.app-category.productivity
   minimumSystemVersion: "13.0"
   hardenedRuntime: true

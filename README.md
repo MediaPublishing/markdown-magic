@@ -2,84 +2,97 @@
 
 **Deutsch** | [English](#english)
 
-Markdown Magic ist ein visueller, lokaler Markdown- und Texteditor für macOS. Dateien bleiben im gewählten Ordner, während Tabs, Gruppen, Seitenansicht und dokumentbezogener Zoom die tägliche Arbeit übersichtlich halten.
+Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev) · [Direkter Download für macOS](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.1.4/Markdown-Magic-0.1.4-arm64.dmg) · [Releases](https://github.com/MediaPublishing/markdown-magic/releases)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.2.0 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.0/Markdown-Magic-0.2.0-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.2.0.md)
 
-![Markdown Magic im hellen Modus](docs/screenshots/workspace-light.png)
+![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
-## Funktionen
+## Schreiben ohne Vorarbeit
 
-- Visuelles Bearbeiten ohne permanente Quelltext-/Vorschau-Teilung
-- Lokale Ordner und Dateien als verlässliche Datenquelle
-- Tabs und kompakte Gruppen für mehrere Dokumente
-- Fortlaufende Ansicht oder Seitenansicht mit bis zu drei Spalten
-- Dokumentzoom ohne Skalierung der gesamten Oberfläche
-- Deutsch, Englisch, Light Mode, Dark Mode und Systemdarstellung
-- Versionshistorie und verständliche Konfliktbehandlung
-- Optionaler Assistent mit fortlaufendem Chat und prüfbaren Vorschlägen
-- Markdown, Klartext, Daten-, Konfigurations- und verbreitete Codedateien
+1. **⌘N:** Sofort mit einem leeren Dokument anfangen.
+2. **Einfach schließen:** Dein Text bleibt in „Entwürfe“ erhalten.
+3. **⌘S:** Wenn du bereit bist, Name und Ablageort im Mac-Sichern-Dialog wählen.
 
-![Markdown Magic in der Seitenansicht](docs/screenshots/pages-light.png)
+Bestehende Dateien öffnest du mit **⌘O**, über den Finder oder über deine Orte in der Seitenleiste. Änderungen werden automatisch gesichert. Ordnerwechsel lässt geöffnete Dokumente stehen.
 
-## Installation
+## Im Alltag
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.1.4/Markdown-Magic-0.1.4-arm64.dmg).
-2. `Markdown Magic.app` in den Ordner `Programme` ziehen.
-3. Die App beim ersten Start mit Rechtsklick und `Öffnen` bestätigen, falls macOS sie blockiert.
+- Zuletzt, Entwürfe, Favoriten und Orte zum Wiederfinden
+- Visuelles Markdown, mit einer sicheren Quelltextansicht für nicht unterstützte Strukturen und andere Textformate
+- Suchen und Ersetzen, Dokumentgliederung, lokale Bilder
+- Dokumenttitel mit Aktionen zum Benennen, Bewegen, Duplizieren und Anzeigen im Finder
+- Kopieren als Markdown oder formatierten Text; PDF-Export und Drucken
+- Eigener Editorzustand samt Rückgängig pro geöffnetem Dokument
+- Lokale Wiederherstellungskopien, Konfliktvergleich und Versionsvorschau
+- Fortlaufende Ansicht oder Seitenvorschau, Dokumentzoom, optionale Tabgruppen
+- Deutsche und englische Oberfläche; helle, dunkle und Systemdarstellung
+- Optionaler Assistent mit Vorschau und Rückgängig
 
-Der aktuelle Beta-Build ist für Apple Silicon und macOS 13 oder neuer gedacht. Er ist lokal signiert, aber noch nicht von Apple notarisiert. Vor einer breiten öffentlichen Nutzung sollte deshalb ein notarisiertes Release folgen.
+![Markdown Magic in der Seitenvorschau](docs/screenshots/pages-light.png)
+
+## Installation und Updates
+
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.0/Markdown-Magic-0.2.0-arm64.dmg).
+2. `Markdown Magic.app` nach `Programme` ziehen.
+3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
+
+**Apple Silicon, macOS 13+.** Die Beta ist ad-hoc signiert, aber noch nicht von Apple notarisiert. Updates sind über das App-Menü und die [Release-Seite](https://github.com/MediaPublishing/markdown-magic/releases) erreichbar; sie werden manuell installiert.
+
+Vorhandene Sitzungen werden mit einer Sicherung der alten Sitzungsdatei übernommen. Dokumentdateien werden nicht umsortiert. Entwürfe, Wiederherstellung und Historie liegen lokal im App-Datenordner. Ein vollständiges Systembackup bleibt sinnvoll: Die Wiederherstellung kann letzte Eingaben, die bei Stromausfall noch nicht auf die Festplatte geschrieben wurden, nicht garantieren.
+
+## Datenschutz
+
+Schreiben benötigt weder Konto noch Internet. Keine Telemetrie, kein proprietäres Dokumentformat. Der optionale Online-Assistent verwendet den vorhandenen lokalen Codex-Zugang und überträgt Dokumentinhalt erst nach einer bewussten Anfrage. Die Offline-Dokumenthilfe ist regelbasiert.
 
 ## Entwicklung
 
 ```sh
 npm install
 npm run dev
-```
-
-Qualitätsprüfung und Paketierung:
-
-```sh
 npm run quality
 npm run package:mac
 ```
 
-Markdown Magic speichert Dokumente direkt im lokalen Dateisystem. Es gibt keine Telemetrie und kein proprietäres Dokumentformat. Der optionale Assistent überträgt Dokumentinhalt erst nach einer bewussten Anfrage.
-
----
+Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test des gebauten App-Pakets kann `MARKDOWN_MAGIC_E2E_EXECUTABLE` auf die ausführbare Datei im App-Bundle gesetzt werden.
 
 ## English
 
-Markdown Magic is a visual, local Markdown and text editor for macOS. Files stay in the folder you choose, while tabs, groups, page view, and document zoom keep everyday writing organized.
+A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Direct macOS download](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.1.4/Markdown-Magic-0.1.4-arm64.dmg) · [Releases](https://github.com/MediaPublishing/markdown-magic/releases)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.2.0 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.0/Markdown-Magic-0.2.0-arm64.dmg) · [Release notes](docs/RELEASE-0.2.0.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
-## Features
+## Start writing
 
-- Visual editing without a permanent source/preview split
-- Local folders and files remain the source of truth
-- Tabs and compact groups for multiple documents
-- Continuous view or page view with up to three columns
-- Document zoom without scaling the whole interface
-- German, English, light, dark, and system appearance
-- Version history and understandable conflict handling
-- Optional assistant with continuous chat and reviewable suggestions
-- Markdown, plain text, data, configuration, and common code files
+1. **⌘N:** Start a blank document immediately.
+2. **Close it:** Your writing remains in Drafts.
+3. **⌘S:** Choose a name and location in the Mac save dialog when you are ready.
 
-## Install
+Open existing files with **⌘O**, Finder or Places. Changes save automatically. Switching folders keeps your open documents intact.
 
-1. [Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.1.4/Markdown-Magic-0.1.4-arm64.dmg).
-2. Drag `Markdown Magic.app` to `Applications`.
-3. On first launch, Control-click the app and choose `Open` if macOS blocks it.
+## Everyday tools
 
-The current beta build targets Apple Silicon and macOS 13 or later. It is locally signed but not yet notarized by Apple. A notarized release should follow before broad public use.
+- Recent, Drafts, Favorites and Places
+- Visual Markdown with safe source editing for unsupported structures and other text formats
+- Find and replace, document outline and local images
+- Title actions for naming, moving, duplicating and revealing files
+- Markdown/formatted copy, PDF export and printing
+- Independent editing state and Undo for each open document
+- Local recovery, conflict comparison and version previews
+- Continuous editing or page preview, document zoom and optional tab groups
+- German/English; light, dark and system appearance
+- Optional assistant with preview and Undo
 
-## Privacy
+## Install and update
 
-Markdown Magic writes documents directly to the local file system. It has no telemetry and no proprietary document format. The optional assistant only transfers document content after an explicit request.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.0/Markdown-Magic-0.2.0-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+
+**Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
+
+Writing needs no account or internet connection. No telemetry or proprietary format. The optional online assistant uses the existing local Codex sign-in and sends document content only after an explicit request. Offline document help uses rules, not a language model.
 
 ## License
 
-No open-source license has been granted yet. The source is publicly available for inspection; all rights remain reserved.
+No open-source license has been granted. Source is publicly available for inspection; all rights remain reserved.

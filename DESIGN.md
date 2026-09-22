@@ -1,30 +1,20 @@
-# Markdown Magic Design
+# Markdown Magic design contract, 0.2
 
-## Product intent
+Scene: a writer uses a Mac in changing daylight, moving between notes and articles. Follow system appearance by default, with equally readable light and dark modes.
 
-Markdown Magic is a local Mac workspace for writing and editing Markdown without a source/preview split. The document itself is the editable surface. Tabs make several documents available at once; colored groups turn related tabs into durable workstreams.
+Restrained neutrals, one blue action accent, native system interface typography and a readable document line length of 65–75 characters. Use existing Lucide icons. No decorative gradients, cards around ordinary content, oversized branding inside the editor, or colored side stripes. The website shows real application screenshots as its main visual proof.
 
-## Visual system
+## Composition
 
-- Use native-feeling typography: system-ui at readable document sizes.
-- Keep chrome quiet: neutral graphite surfaces, one restrained blue accent, and saturated group colors only as small borders and chips.
-- Avoid decorative gradients and oversized cards. Panels are functional surfaces with 8 to 10 pixel radii.
-- Icons come from Lucide and remain monochrome in toolbar contexts.
-- Text never scales with viewport width; document width is constrained for reading comfort.
+- Sidebar roughly 230px: New document, Recent, Drafts, Favorites, Places; settings at the bottom.
+- One document title/status bar. Title actions expose save/name, move, duplicate, reveal, history and export.
+- Compact visible formatting; rare actions disclosed. No permanent ungrouped group bar. Tabs appear for multiple open documents; groups remain optional.
+- Main surface is the document, with a clear writing cursor. A blank session offers New document and Open document plus recent work.
+- A single optional assistant entry. Preview clearly labelled as preview; preserve document zoom and page view.
+- Search in document uses Cmd+F, next match Cmd+G, with replace. Outline and document word count are unobtrusive.
 
-## Interaction rules
+## States and accessibility
 
-- Opening a folder loads a Finder-like tree for local Markdown and plain-text files; search falls back to a flat result list.
-- A click opens a document in one stable tab. Dirty documents show a dot until saved.
-- Multiple files can be selected in the navigation and turned into one tab group.
-- Tabs use pointer-based drag-and-drop: edges reorder, centers group, dropping outside groups releases a tab, and group chips move as whole clusters.
-- The header offers continuous editor mode, Acrobat-like page review, and persistent document zoom from 50 to 300 percent. Zoom scales the document surface only; window chrome remains stable and the canvas adapts to the available screen width.
-- Groups carry a name, short description, icon, color and collapsed state.
-- All workspace structure survives restart. File contents always live on disk, not inside the app database.
-- Saving writes atomically and keeps the user's Markdown as the canonical format.
+Cover empty, typing, saving, saved draft, saved file, missing file, failed save, conflict, recovery, native save cancellation, and restored session. Persist important errors until resolved. Preserve focus and keyboard access; label actual editable surfaces, dialog actions and icon controls. Respect reduced motion.
 
-## Non-goals
-
-- No mandatory cloud account and no telemetry. The optional assistant may use ChatGPT sign-in or an OpenAI-compatible API key after explicit setup.
-- No proprietary document format.
-- No split source/preview mode.
+App evidence: 1360×900 and 900×700, light/dark, empty, draft and populated document. Website evidence: desktop and narrow phone, both languages, actual screenshots and working download link. The public website is a quieter explanation of the same writing-first product, not a second design system.

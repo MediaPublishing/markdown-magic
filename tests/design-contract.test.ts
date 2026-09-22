@@ -42,6 +42,6 @@ describe('Mac interface design contract', () => {
 
   it('loads the document editor only when a document is opened', () => {
     expect(uiSource).not.toContain("import { createMilkdownEditor } from './milkdown-editor'");
-    expect(uiSource).toContain("await import('./milkdown-editor')");
+    expect(readFileSync(new URL('../src/renderer/document-editor.ts', import.meta.url), 'utf8')).toContain("await import('./milkdown-editor')");
   });
 });

@@ -3,92 +3,61 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-test('captures public product screenshots with demo-only content', async () => {
-  const testRoot=await fs.mkdtemp(path.join(os.tmpdir(),'markdown-magic-public-demo-'));
-  const userDataDirectory=path.join(testRoot,'user-data');
-  const documentRoot=path.join(testRoot,'Markdown Magic Demo');
-  await fs.mkdir(userDataDirectory,{recursive:true}); await fs.mkdir(documentRoot,{recursive:true});
-  const welcomePath=path.join(documentRoot,'Welcome.md'); const guidePath=path.join(documentRoot,'Writing Guide.md'); const releasePath=path.join(documentRoot,'Release Notes.md');
-  await fs.writeFile(welcomePath,`# A calmer way to work with Markdown
-
-Markdown Magic keeps local files at the center of your writing workflow.
-
-## One document, one clear surface
-
-Write formatted content directly without switching between source and preview. Headings, lists, quotes, links, images, tables, and code remain familiar Markdown on disk.
-
-> Your folder stays the source of truth.
-
-## Built for everyday work
-
-- Open an existing folder from your Mac
-- Keep related files together in compact tab groups
-- Switch between continuous editing and page review
-- Zoom the document without scaling the interface
-- Review external changes before replacing your work
-
-## Local by default
-
-There is no proprietary document format. Your files remain readable in any editor and easy to back up with the tools you already use.
-`,'utf8');
-  await fs.writeFile(guidePath,`# Writing Guide
-
-## Start with the answer
-
-Give each section one clear purpose. Short paragraphs make long documents easier to scan and simpler to revise.
-
-## Keep the structure visible
-
-Use descriptive headings, concise lists, and tables only when comparison matters.
-
-## Review as pages
-
-Page view helps find dense passages, awkward breaks, and tables that need more room before publication.
-`,'utf8');
-  await fs.writeFile(releasePath,`# Release Notes
-
-## Markdown Magic 0.1.4
-
-This beta focuses on a calmer, more reliable desktop workflow.
-
-### Editing
-
-- Visual Markdown editing with local file persistence
-- Continuous and multi-page document views
-- Document zoom from 50 to 300 percent
-- Better wrapping for long links and code
-
-### Organization
-
-- Finder-like navigation and search
-- Multiple files in tabs and named groups
-- A compact focus mode that fully collapses navigation
-
-### Safety
-
-- Version history before important changes
-- Clear handling for moved or externally edited files
-- Reviewable assistant suggestions with undo
-
-## Supported files
-
-Markdown Magic opens Markdown, plain text, data, configuration, web, and common source-code files. Everything stays in the folder you selected.
-
-## What comes next
-
-The next public release will focus on Apple notarization, streamlined onboarding, and broader compatibility testing.
-`,'utf8');
-  const groupId='group-product';
-  const tabs=[welcomePath,guidePath,releasePath].map((filePath)=>({id:`tab-${encodeURIComponent(filePath)}`,path:filePath,title:path.basename(filePath),groupId,dirty:false,missing:false}));
-  await fs.writeFile(path.join(userDataDirectory,'workspace-state.json'),JSON.stringify({version:1,rootPath:documentRoot,groups:[{id:groupId,name:'Product',description:'',icon:'M',color:'blue',collapsed:false}],tabs,activeTabId:tabs[0]!.id},null,2),'utf8');
-  await fs.writeFile(path.join(userDataDirectory,'onboarding-complete'),'1','utf8');
-  const electronApp=await _electron.launch({args:['.'],cwd:process.cwd(),env:{...process.env,MARKDOWN_MAGIC_USER_DATA_DIR:userDataDirectory}});
-  const window=await electronApp.firstWindow(); await window.evaluate(()=>globalThis.resizeTo(1440,900));
-  await expect(window.locator('.ProseMirror h1')).toContainText('A calmer way'); await window.screenshot({path:'docs/screenshots/workspace-light.png'});
-  await window.locator('.tab',{hasText:'Release Notes.md'}).click(); await expect(window.locator('.ProseMirror h1')).toContainText('Release Notes');
-  await window.locator('[data-view-mode="pages"]').click(); await window.locator('[data-page-columns="2"]').click(); await expect(window.locator('.page-preview-grid')).toHaveAttribute('data-page-columns','2');
-  await window.screenshot({path:'docs/screenshots/pages-light.png'});
-  await window.evaluate(()=>localStorage.setItem('markdown-magic:theme','dark')); await window.reload(); await expect(window.locator('body')).toHaveAttribute('data-theme','dark');
-  await window.locator('[data-view-mode="flow"]').click(); await window.locator('[data-action="toggle-sidebar"]').click(); await expect(window.locator('#app')).toHaveClass(/sidebar-collapsed/);
-  await window.screenshot({path:'docs/screenshots/focus-dark.png'}); await electronApp.close();
+test('captures current public product and compact-window screenshots using only demo content', async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'markdown-magic-public-demo-'));
+  const testRoot = await fs.realpath(temporary);
+  const data = path.join(testRoot, 'profile');
+  const docs = path.join(testRoot, 'Writing');
+  const draftId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const draftFolder = path.join(data, 'drafts', draftId);
+  await Promise.all([fs.mkdir(docs, { recursive: true }), fs.mkdir(draftFolder, { recursive: true }), fs.mkdir('receipts/0.2', { recursive: true })]);
+  const draftPath = path.join(draftFolder, 'Untitled.md');
+  const guidePath = path.join(docs, 'Writing Guide.md');
+  const draft = { id: `draft-${draftId}`, path: draftPath, title: 'Untitled', groupId: null, dirty: false, missing: false, draft: true };
+  const guide = { id: `tab-${encodeURIComponent(guidePath)}`, path: guidePath, title: 'Writing Guide.md', groupId: null, dirty: false, missing: false };
+  await fs.writeFile(path.join(draftFolder, 'metadata.json'), JSON.stringify({ version: 1, createdAt: Date.now(), tab: draft }));
+  await fs.writeFile(draftPath, '# A little room to think\n\nSome ideas need a blank page before they need a name.\n\n## Start with what matters\n\nPut the first thought down. Follow it with another. The words can take shape before you decide where they belong.\n\n- A note from a conversation\n- The beginning of an article\n- A plan for the week ahead\n\n## Make it your own\n\nUse headings to find your way, highlight a useful sentence, or add an image. Your draft stays on your Mac, ready when you come back.\n\n> Write now. Choose a home later.\n');
+  await fs.writeFile(guidePath, '# A guide to clear writing\n\n## Begin with one thought\n\nGive each section one purpose. A helpful heading tells your reader what comes next.\n\n## Leave room to breathe\n\nShort paragraphs are easier to follow. Read your writing aloud and notice where you need a pause.\n\n### A small checklist\n\n- Is the opening clear?\n- Does every section earn its place?\n- Can a shorter sentence do the same work?\n\n## Review the whole document\n\nUse page preview to see the shape of a longer piece. Return to the editor whenever a passage needs another look.\n\n' + Array.from({ length: 15 }, (_, i) => `### Note ${i + 1}\n\nGood writing gives the reader enough detail to understand, then lets the point stand. Keep what helps. Refine what gets in the way.\n`).join('\n'));
+  await fs.writeFile(path.join(data, 'workspace-state.json'), JSON.stringify({ version: 2, rootPath: docs, groups: [], tabs: [draft, guide], activeTabId: draft.id }));
+  await fs.writeFile(path.join(data, 'trusted-roots.json'), JSON.stringify([docs, path.join(data, 'drafts')]));
+  const app = await _electron.launch({ args: ['.'], cwd: process.cwd(), env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: data, MARKDOWN_MAGIC_HOME_DIR: testRoot } });
+  try {
+    const page = await app.firstWindow();
+    await page.evaluate(() => { localStorage.setItem('markdown-magic:locale', 'en'); localStorage.setItem('markdown-magic:theme', 'light'); });
+    await page.reload();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
+    await expect(page.locator('.ProseMirror:visible h1')).toContainText('A little room');
+    await page.locator('[data-library-view="drafts"]').click();
+    await expect(page.locator('.preview-label')).toBeHidden();
+    await page.locator('[data-action="document-menu"]').click();
+    await expect(page.locator('.document-menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.document-menu')).toHaveCount(0);
+    await page.locator('[data-library-view="drafts"]').click();
+    await page.screenshot({ path: 'docs/screenshots/workspace-light.png' });
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(900, 700));
+    await page.screenshot({ path: 'receipts/0.2/editor-900.png' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
+    await page.locator('.tab', { hasText: 'Writing Guide.md' }).click();
+    await page.locator('[data-action="view-menu"]').click();
+    await page.locator('[data-menu-view="pages"]').click();
+    await page.locator('[data-action="view-menu"]').click();
+    await page.locator('[data-menu-columns="2"]').click();
+    await expect(page.locator('.page-preview-grid')).toHaveAttribute('data-page-columns', '2');
+    await page.screenshot({ path: 'docs/screenshots/pages-light.png' });
+    await page.evaluate(() => localStorage.setItem('markdown-magic:theme', 'dark'));
+    await page.reload();
+    await expect(page.locator('body')).toHaveAttribute('data-theme', 'dark');
+    await page.locator('[data-action="view-menu"]').click();
+    await page.locator('[data-menu-view="flow"]').click();
+    await page.locator('[data-action="toggle-sidebar"]').click();
+    await expect(page.locator('#app')).toHaveClass(/sidebar-collapsed/);
+    await page.screenshot({ path: 'docs/screenshots/focus-dark.png' });
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.send('markdown-magic-menu', 'close-active-tab'));
+    await expect(page.locator('.tab')).toHaveCount(1);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.send('markdown-magic-menu', 'close-active-tab'));
+    await expect(page.locator('.empty-state')).toBeVisible();
+    await page.screenshot({ path: 'receipts/0.2/empty-dark.png' });
+  } finally { await app.close(); }
 });

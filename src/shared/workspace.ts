@@ -9,7 +9,7 @@ export function tabIdForPath(path: string): string {
 export function normalizeState(input: unknown): WorkspaceState {
   if (!input || typeof input !== 'object') return emptyState();
   const raw = input as Partial<WorkspaceState>;
-  if (raw.version !== 1) return emptyState();
+  if (raw.version !== 1 && raw.version !== 2) return emptyState();
   const groups = Array.isArray(raw.groups)
     ? raw.groups.filter(isGroup).map((group, index) => ({ ...group, id: group.id || `group-${index + 1}` }))
     : [];
@@ -17,7 +17,11 @@ export function normalizeState(input: unknown): WorkspaceState {
   const tabs = Array.isArray(raw.tabs)
     ? raw.tabs.filter(isTab).map((tab, index) => ({
         ...tab,
-        id: tab.id || tabIdForPath(tab.path),
+        id: typeof tab.id === 'string' && tab.id ? tab.id : tabIdForPath(tab.path),
+        title: typeof tab.title === 'string' ? tab.title : fileName(tab.path),
+        dirty: tab.dirty === true,
+        missing: tab.missing === true,
+        ...(tab.draft === true ? { draft: true } : {}),
         groupId: tab.groupId && knownGroups.has(tab.groupId) ? tab.groupId : null,
       }))
     : [];
@@ -26,7 +30,7 @@ export function normalizeState(input: unknown): WorkspaceState {
     ? raw.activeTabId!
     : uniqueTabs[0]?.id ?? null;
   return {
-    version: 1,
+    version: 2,
     rootPath: typeof raw.rootPath === 'string' && raw.rootPath ? raw.rootPath : null,
     groups,
     tabs: uniqueTabs,
@@ -35,14 +39,13 @@ export function normalizeState(input: unknown): WorkspaceState {
 }
 
 export function emptyState(): WorkspaceState {
-  return { version: 1, rootPath: null, groups: [], tabs: [], activeTabId: null };
+  return { version: 2, rootPath: null, groups: [], tabs: [], activeTabId: null };
 }
 
 export function openFile(state: WorkspaceState, path: string, title = fileName(path)): WorkspaceState {
+  const existing = state.tabs.find((tab) => tab.path === path);
+  if (existing) return { ...state, activeTabId: existing.id };
   const id = tabIdForPath(path);
-  if (state.tabs.some((tab) => tab.id === id)) {
-    return { ...state, activeTabId: id };
-  }
   const tab: EditorTab = { id, path, title, groupId: null, dirty: false, missing: false };
   return { ...state, tabs: [...state.tabs, tab], activeTabId: id };
 }

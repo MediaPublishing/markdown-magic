@@ -1,24 +1,182 @@
 const copy = {
   de: {
-    navFeatures:'Funktionen',navPrivacy:'Datenschutz',navDownload:'Download',heroEyebrow:'Lokaler Editor für macOS',heroLead:'Schreiben, ordnen und prüfen Sie Markdown-Dateien in einer ruhigen, visuellen Arbeitsfläche. Ihre Dokumente bleiben lokal auf Ihrem Mac.',downloadMac:'Für macOS herunterladen',viewGithub:'Quellcode auf GitHub',compatibility:'macOS 13+ · Beta · lokal signiert, noch nicht notarisiert',introTitle:'Ihre Dateien. Ihr Ordner. Kein neues Format.',introText:'Markdown Magic verbindet die Verlässlichkeit lokaler Dateien mit einer Oberfläche, die sich wie ein fokussiertes Mac-Werkzeug anfühlt.',featuresEyebrow:'Für den täglichen Schreibfluss',featuresTitle:'Weniger Dateiverwaltung, mehr Überblick',feature1Title:'Visuell bearbeiten',feature1Text:'Formatierter Text bleibt direkt editierbar. Markdown bleibt das Dateiformat im Hintergrund.',feature2Title:'Lokal organisiert',feature2Text:'Finder-Ordner, Suche, Tabs und Gruppen bilden Ihre bestehende Ablage ab.',feature3Title:'Seiten sauber prüfen',feature3Text:'Lange Dokumente als fortlaufenden Text oder in einer bis drei Seiten-Spalten lesen.',feature4Title:'Änderungen kontrollieren',feature4Text:'Historie, Konflikthinweise und prüfbare Assistenten-Vorschläge schützen Ihre Arbeit.',pagesEyebrow:'Dokumentansicht',pagesTitle:'Vom Schreibfluss zur Seitenprüfung',pagesText:'Wechseln Sie zwischen einer ruhigen, fortlaufenden Bearbeitung und einer Mehrseitenansicht. Zoom und Spalten verändern nur das Dokument, nicht die Oberfläche.',focusEyebrow:'Fokusmodus',focusTitle:'Navigation weg, Werkzeugleiste bereit',focusText:'Klappen Sie die Navigation vollständig ein und nutzen Sie die gesamte Fensterbreite. Light, Dark und Systemdarstellung sind direkt im Header erreichbar.',privacyEyebrow:'Local first',privacyTitle:'Ihre Dokumente bleiben Ihre Dokumente',privacy1:'Dateien werden direkt im lokalen Dateisystem gelesen und gespeichert.',privacy2:'Kein Konto, keine Telemetrie und kein proprietäres Dokumentformat.',privacy3:'Der optionale Assistent sendet Inhalt erst nach einer bewussten Anfrage.',installEyebrow:'Beta installieren',installTitle:'In drei Schritten startklar',install1Title:'DMG laden',install1Text:'Laden Sie die aktuelle Apple-Silicon-Version direkt herunter.',install2Title:'In Programme ziehen',install2Text:'Öffnen Sie das DMG und verschieben Sie Markdown Magic nach Programme.',install3Title:'Einmal bestätigen',install3Text:'Da die Beta noch nicht notarisiert ist, beim ersten Start Rechtsklick → Öffnen wählen.',downloadNow:'Direkt herunterladen',allReleases:'Alle Versionen ansehen',footerText:'Ein lokaler Markdown-Arbeitsplatz für macOS.',heroAlt:'Markdown Magic mit Ordnernavigation, Tabs und visuellem Editor',pagesAlt:'Markdown Magic mit mehrspaltiger Seitenansicht',focusAlt:'Markdown Magic im dunklen Fokusmodus',title:'Markdown Magic – visueller Markdown-Editor für macOS',description:'Markdown Magic ist ein visueller, lokaler Markdown- und Texteditor für macOS.'
+    skipLink: 'Zum Inhalt',
+    homeLabel: 'Markdown Magic Startseite',
+    navLabel: 'Hauptnavigation',
+    languageLabel: 'Sprache',
+    navDrafts: 'Entwürfe',
+    navFiles: 'Dateien',
+    navDownload: 'Download',
+    headerDownload: 'Beta laden',
+    releaseLine: 'Version 0.2 Beta für macOS',
+    heroTitle: 'Schreib zuerst.\nSpeicher später.',
+    heroLead: 'Öffne ein neues Dokument und leg direkt los. Markdown Magic hält deinen Text als lokalen Entwurf fest. Name und Speicherort wählst du, wenn es für dich passt.',
+    downloadMac: 'Für Mac herunterladen',
+    seeHow: 'So funktionieren Entwürfe',
+    compatibility: 'macOS 13+ · Beta · ad hoc signiert, nicht notarisiert',
+    heroCaption: 'Deine letzten Texte, Entwürfe und Orte bleiben in Reichweite.',
+    draftKicker: 'Der neue Schreibfluss',
+    draftTitle: 'Ein leerer Text braucht noch keinen Dateinamen.',
+    draft1Title: 'Anfangen',
+    draft1Text: '⌘N öffnet sofort ein neues Dokument und setzt den Cursor an die richtige Stelle.',
+    draft2Title: 'Weiterschreiben',
+    draft2Text: 'Markdown Magic sichert nichtleere Entwürfe lokal. Du kannst schließen und nach einem Neustart zurückkehren.',
+    draft3Title: 'Ablegen',
+    draft3Text: 'Wenn der Text einen Platz braucht, wählst du Name und Ordner im vertrauten macOS-Dialog. Abbrechen lässt den Entwurf bestehen.',
+    editorKicker: 'Visuelles Markdown',
+    editorTitle: 'Format sehen. In Markdown bleiben.',
+    editorText: 'Überschriften, Listen, Links und Hervorhebungen bearbeitest du direkt im formatierten Text. Für Suchen, Speichern, Drucken und neue Dokumente funktionieren die vertrauten Mac-Kürzel.',
+    editorCaption: 'Der Text bleibt im Mittelpunkt, Werkzeuge bleiben nah.',
+    filesKicker: 'Normale lokale Dateien',
+    filesTitle: 'Deine Ablage bleibt deine Ablage.',
+    fileIntro: 'Markdown Magic arbeitet mit den Markdown- und Textdateien auf deinem Mac. Bestehende Dateien bleiben an ihrem Ort.',
+    file1Title: 'Lesbar',
+    file1Text: 'Markdown bleibt ein normales Dateiformat, das andere Apps öffnen können.',
+    file2Title: 'Kontrollierbar',
+    file2Text: 'Die Quellansicht macht Frontmatter und besondere Markdown-Syntax direkt prüfbar.',
+    file3Title: 'Ohne Voraussetzung',
+    file3Text: 'Du brauchst weder ein Konto noch eine AI-Einrichtung, um zu schreiben.',
+    focusCaption: 'Hell, dunkel oder wie dein Mac. Die Darstellung folgt deinem System.',
+    newKicker: 'Neu in 0.2',
+    newTitle: 'Ruhiger schreiben, sicher wiederfinden.',
+    new1Title: 'Entwürfe',
+    new1Text: 'Neue Texte werden automatisch lokal festgehalten und nach einem Neustart wieder angeboten.',
+    new2Title: 'Bibliothek',
+    new2Text: 'Zuletzt verwendet, Entwürfe, Favoriten und Orte bringen wichtige Dokumente zusammen.',
+    new3Title: 'Dateischutz',
+    new3Text: 'Externe Änderungen, fehlende Dateien und nicht unterstützte Markdown-Elemente werden sichtbar behandelt.',
+    new4Title: 'Optionale AI',
+    new4Text: 'Vorschläge bleiben prüfbar und können rückgängig gemacht werden. Ohne AI schreibt es sich genauso weiter.',
+    installKicker: 'Beta für Apple Silicon',
+    installTitle: 'Markdown Magic 0.2 ausprobieren.',
+    installText: 'Die Beta läuft auf Macs mit Apple Chip ab macOS 13. Sie ist ad hoc signiert und noch nicht von Apple notarisiert.',
+    downloadNow: 'DMG herunterladen',
+    allReleases: 'Versionshinweise ansehen',
+    install1Title: 'DMG öffnen',
+    install1Text: 'Lade die Datei und öffne das Image.',
+    install2Title: 'App verschieben',
+    install2Text: 'Ziehe Markdown Magic in den Ordner Programme.',
+    appleHelp: 'Apples Hinweise zum ersten Start',
+    install3Title: 'Ersten Start bestätigen',
+    install3Text: 'Falls macOS den Start blockiert: Prüfe die App unter Systemeinstellungen → Datenschutz & Sicherheit und bestätige dort „Dennoch öffnen“.',
+    footerText: 'Ein ruhiger Schreibplatz für normale Markdown-Dateien.',
+    footerReleases: 'Releases',
+    heroAlt: 'Markdown Magic mit Entwürfen, Dokumentnavigation und visuellem Editor',
+    editorAlt: 'Ein formatierter Markdown-Text in Markdown Magic',
+    focusAlt: 'Markdown Magic im ruhigen dunklen Schreibmodus',
+    title: 'Markdown Magic – sofort schreiben, später ablegen',
+    description: 'Markdown Magic ist ein ruhiger, visueller Markdown-Editor für lokale Dateien und automatische Entwürfe auf dem Mac.',
+    ogDescription: 'Sofort schreiben. Markdown Magic hält neue Texte als lokale Entwürfe fest, bis du sie benennst und ablegst.'
   },
   en: {
-    navFeatures:'Features',navPrivacy:'Privacy',navDownload:'Download',heroEyebrow:'Local editor for macOS',heroLead:'Write, organize, and review Markdown files in a calm visual workspace. Your documents stay local on your Mac.',downloadMac:'Download for macOS',viewGithub:'View source on GitHub',compatibility:'macOS 13+ · Beta · locally signed, not yet notarized',introTitle:'Your files. Your folder. No new format.',introText:'Markdown Magic combines the reliability of local files with an interface that feels like a focused Mac tool.',featuresEyebrow:'Built for everyday writing',featuresTitle:'Less file management, more clarity',feature1Title:'Edit visually',feature1Text:'Formatted text stays directly editable while Markdown remains the file format underneath.',feature2Title:'Organize locally',feature2Text:'Finder folders, search, tabs, and groups reflect the structure you already have.',feature3Title:'Review clean pages',feature3Text:'Read long documents as a continuous flow or across one to three page columns.',feature4Title:'Control changes',feature4Text:'History, conflict notices, and reviewable assistant suggestions protect your work.',pagesEyebrow:'Document view',pagesTitle:'From writing flow to page review',pagesText:'Switch between calm continuous editing and a multi-page view. Zoom and columns change the document, not the interface.',focusEyebrow:'Focus mode',focusTitle:'Navigation away, tools still ready',focusText:'Collapse navigation completely and use the full window width. Light, dark, and system appearance are available in the header.',privacyEyebrow:'Local first',privacyTitle:'Your documents remain your documents',privacy1:'Files are read and saved directly in the local file system.',privacy2:'No account, no telemetry, and no proprietary document format.',privacy3:'The optional assistant only sends content after an explicit request.',installEyebrow:'Install the beta',installTitle:'Ready in three steps',install1Title:'Download the DMG',install1Text:'Download the current Apple Silicon build directly.',install2Title:'Drag to Applications',install2Text:'Open the DMG and move Markdown Magic to Applications.',install3Title:'Confirm once',install3Text:'Because the beta is not notarized yet, Control-click → Open on first launch.',downloadNow:'Download directly',allReleases:'View all releases',footerText:'A local Markdown workspace for macOS.',heroAlt:'Markdown Magic with folder navigation, tabs, and a visual editor',pagesAlt:'Markdown Magic in multi-column page view',focusAlt:'Markdown Magic in dark focus mode',title:'Markdown Magic – visual Markdown editor for macOS',description:'Markdown Magic is a visual, local Markdown and text editor for macOS.'
+    skipLink: 'Skip to content',
+    homeLabel: 'Markdown Magic home',
+    navLabel: 'Main navigation',
+    languageLabel: 'Language',
+    navDrafts: 'Drafts',
+    navFiles: 'Files',
+    navDownload: 'Download',
+    headerDownload: 'Download beta',
+    releaseLine: 'Version 0.2 beta for macOS',
+    heroTitle: 'Write first.\nSave it later.',
+    heroLead: 'Open a new document and start writing. Markdown Magic keeps your text as a local draft. Choose a name and location when you are ready.',
+    downloadMac: 'Download for Mac',
+    seeHow: 'See how drafts work',
+    compatibility: 'macOS 13+ · Beta · ad hoc signed, not notarized',
+    heroCaption: 'Recent work, drafts, and locations stay within reach.',
+    draftKicker: 'The new writing flow',
+    draftTitle: 'A blank page does not need a filename yet.',
+    draft1Title: 'Start',
+    draft1Text: '⌘N opens a new document immediately and puts the cursor where it belongs.',
+    draft2Title: 'Keep writing',
+    draft2Text: 'Markdown Magic keeps non-empty drafts locally. Close the app and return after a restart.',
+    draft3Title: 'File it',
+    draft3Text: 'When the text needs a home, choose its name and folder in the familiar macOS save sheet. Canceling keeps the draft.',
+    editorKicker: 'Visual Markdown',
+    editorTitle: 'See the formatting. Keep the Markdown.',
+    editorText: 'Edit headings, lists, links, and emphasis directly in formatted text. Familiar Mac shortcuts work for finding, saving, printing, and creating documents.',
+    editorCaption: 'Your text stays central while the tools remain close.',
+    filesKicker: 'Normal local files',
+    filesTitle: 'Your filing system stays yours.',
+    fileIntro: 'Markdown Magic works with the Markdown and text files on your Mac. Existing files stay where you put them.',
+    file1Title: 'Readable',
+    file1Text: 'Markdown remains a normal file format that other apps can open.',
+    file2Title: 'Inspectable',
+    file2Text: 'Source view makes frontmatter and special Markdown syntax directly inspectable.',
+    file3Title: 'No prerequisites',
+    file3Text: 'You do not need an account or an AI setup to write.',
+    focusCaption: 'Light, dark, or matched to your Mac. Appearance follows your system.',
+    newKicker: 'New in 0.2',
+    newTitle: 'Write more calmly. Find your work again.',
+    new1Title: 'Drafts',
+    new1Text: 'New writing is kept locally and offered again after a restart.',
+    new2Title: 'Library',
+    new2Text: 'Recent, Drafts, Favorites, and Places bring important documents together.',
+    new3Title: 'File safety',
+    new3Text: 'External changes, missing files, and unsupported Markdown elements are handled visibly.',
+    new4Title: 'Optional AI',
+    new4Text: 'Suggestions remain reviewable and undoable. Writing continues normally without AI.',
+    installKicker: 'Beta for Apple Silicon',
+    installTitle: 'Try Markdown Magic 0.2.',
+    installText: 'The beta runs on Apple silicon Macs with macOS 13 or later. It is ad hoc signed and not yet notarized by Apple.',
+    downloadNow: 'Download the DMG',
+    allReleases: 'View release notes',
+    install1Title: 'Open the DMG',
+    install1Text: 'Download the file and open the disk image.',
+    install2Title: 'Move the app',
+    install2Text: 'Drag Markdown Magic into Applications.',
+    appleHelp: 'Apple’s guidance for the first launch',
+    install3Title: 'Confirm the first launch',
+    install3Text: 'If macOS blocks the first launch, review the app in System Settings → Privacy & Security, then choose “Open Anyway”.',
+    footerText: 'A calm writing space for ordinary Markdown files.',
+    footerReleases: 'Releases',
+    heroAlt: 'Markdown Magic with drafts, document navigation, and a visual editor',
+    editorAlt: 'Formatted Markdown text in Markdown Magic',
+    focusAlt: 'Markdown Magic in a calm dark writing mode',
+    title: 'Markdown Magic – write first, save it later',
+    description: 'Markdown Magic is a calm visual Markdown editor for local files and automatic drafts on Mac.',
+    ogDescription: 'Start writing immediately. Markdown Magic keeps new text as a local draft until you name and file it.'
   }
 };
 
 function setLanguage(language) {
   const selected = copy[language] ? language : 'de';
+  const selectedCopy = copy[selected];
   document.documentElement.lang = selected;
-  document.querySelectorAll('[data-copy]').forEach((element) => { const value=copy[selected][element.dataset.copy]; if(value) element.textContent=value; });
-  document.querySelectorAll('[data-alt]').forEach((element) => { const value=copy[selected][element.dataset.alt]; if(value) element.alt=value; });
-  document.querySelectorAll('[data-language]').forEach((button) => button.setAttribute('aria-pressed',String(button.dataset.language===selected)));
-  document.title=copy[selected].title;
-  document.querySelector('meta[name="description"]').content=copy[selected].description;
-  history.replaceState(null,'',selected==='en'?'/en/':'/');
-  localStorage.setItem('markdown-magic-language',selected);
+
+  document.querySelectorAll('[data-copy]').forEach((element) => {
+    const value = selectedCopy[element.dataset.copy];
+    if (!value) return;
+    if (element.dataset.copy === 'heroTitle') {
+      const [firstLine, secondLine] = value.split('\n');
+      element.replaceChildren(document.createTextNode(firstLine), document.createElement('br'), document.createTextNode(secondLine));
+      return;
+    }
+    element.textContent = value;
+  });
+
+  document.querySelectorAll('[data-alt]').forEach((element) => {
+    const value = selectedCopy[element.dataset.alt];
+    if (value) element.alt = value;
+  });
+
+  document.querySelectorAll('[data-copy-aria]').forEach((element) => {
+    const value = selectedCopy[element.dataset.copyAria];
+    if (value) element.setAttribute('aria-label', value);
+  });
+
+  document.querySelectorAll('.language-switch a').forEach((link) => {
+    if (link.getAttribute('hreflang') === selected) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+
+  document.title = selectedCopy.title;
+  document.querySelector('meta[name="description"]').content = selectedCopy.description;
+  document.querySelector('meta[property="og:description"]').content = selectedCopy.ogDescription;
+  const canonicalUrl = selected === 'en' ? 'https://markdown-magic.pages.dev/en/' : 'https://markdown-magic.pages.dev/';
+  document.querySelector('meta[property="og:url"]').content = canonicalUrl;
+  document.querySelector('link[rel="canonical"]').href = canonicalUrl;
 }
 
-document.querySelectorAll('[data-language]').forEach((button)=>button.addEventListener('click',()=>setLanguage(button.dataset.language)));
-const pathLanguage=location.pathname.startsWith('/en')?'en':null;
-setLanguage(pathLanguage||localStorage.getItem('markdown-magic-language')||(navigator.language.startsWith('de')?'de':'en'));
+const pathLanguage = location.pathname === '/en' || location.pathname.startsWith('/en/') ? 'en' : 'de';
+setLanguage(pathLanguage);

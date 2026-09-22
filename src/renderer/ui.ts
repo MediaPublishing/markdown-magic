@@ -17,6 +17,7 @@ import type { AssistantChatMessage, AssistantProposal } from '../shared/assistan
 import type { AssistantProviderStatus } from '../main/codex-assistant';
 import { locales, normalizeLocale, ONBOARDING_STEPS, translate, type Locale, type TranslationKey } from './i18n';
 import type { DocumentEditor } from './document-editor';
+import { createDocumentEditor } from './document-editor';
 import brandMarkUrl from '../../design/brand/markdown-magic-mark.png?url';
 import folderIcon from 'lucide-static/icons/folder-open.svg?raw';
 import searchIcon from 'lucide-static/icons/search.svg?raw';
@@ -116,6 +117,16 @@ let files: FileEntry[] = [];
 let activeEditor: DocumentEditor | null = null;
 let activeEditorPath: string | null = null;
 let activeEditorMtimeMs: number | null = null;
+type DocumentSession = {
+  id: string; path: string; host: HTMLElement; editor: DocumentEditor | null; toolbar: Element | null;
+  content: string; savedContent: string; mtime: number | null; revision: number; savedRevision: number;
+  recoveryFloor: number; scrollTop: number; relocating?: boolean; timer?: number; saving?: Promise<boolean>; recovery: Promise<boolean>; suppress: boolean;
+};
+const sessions = new Map<string, DocumentSession>();
+let beforeCloseUnsubscribe: (() => void) | undefined;
+let drafts: EditorTab[] = [];
+let libraryView: 'recent' | 'drafts' | 'favorites' | 'places' = 'recent';
+let statusError = false;
 let saveTimer: number | undefined;
 let autosaveTimer: number | undefined;
 let statusDismissTimer: number | undefined;
@@ -267,14 +278,16 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
       <div class="sidebar-header">
         <div class="brand-row">
           <button class="brand-lockup" type="button" data-action="toggle-sidebar" title="${t('toggleSidebar')}" aria-label="${t('toggleSidebar')}" aria-expanded="true">${brandLockupMarkup()}</button>
-          <button class="icon-action sidebar-settings" type="button" data-action="settings" title="${t('settings')}" aria-label="${t('settings')}">${iconMarkup(settingsIcon)}</button>
+
         </div>
-        <button class="primary-action" data-action="choose-folder" title="${t('chooseFolderTitle')}"><span class="action-icon">${iconMarkup(folderIcon)}</span><span>${t('chooseFolder')}</span></button>
-        ${folderSwitcherMarkup()}
+        <button class="primary-action" data-action="new-file"><span class="action-icon">${iconMarkup(plusIcon)}</span><span>${t('newFile')}</span></button>
+        <button class="ghost-action" data-action="open-file">${iconMarkup(folderIcon)}<span>${t('openAnotherFile')}</span></button>
+        <div class="library-navigation">${(['recent', 'drafts', 'favorites', 'places'] as const).map((view) => `<button type="button" class="library-button ${view === libraryView ? 'active' : ''}" data-library-view="${view}">${iconMarkup(view === 'recent' ? historyIcon : view === 'drafts' ? fileTextIcon : view === 'favorites' ? pinIcon : folderIcon)}<span>${t(view)}</span></button>`).join('')}</div>
         <label class="search-wrap"><span class="sr-only">${t('searchPlaceholder')}</span><span class="search-icon">${iconMarkup(searchIcon)}</span><input class="file-search" type="search" placeholder="${t('searchPlaceholder')}" aria-label="${t('searchPlaceholder')}" /></label>
-        <div class="navigation-heading"><strong>${t('navigationTitle')}</strong><small>${t('navigationSubtitle')}</small></div>
+
       </div>
       <nav class="file-list" aria-label="${t('navigationSubtitle')}"></nav>
+      <div class="sidebar-footer"><button class="ghost-action" data-action="choose-folder">${iconMarkup(plusIcon)}${t('addPlace')}</button><button class="sidebar-settings ghost-action" data-action="settings">${iconMarkup(settingsIcon)}${t('settings')}</button></div>
       <div class="sidebar-resizer" role="separator" aria-orientation="vertical" tabindex="0" title="Ziehen, Doppelklick oder Pfeiltasten"></div>
     </aside>
     <main class="workspace">
@@ -292,7 +305,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
         <header class="document-header">
           <div class="document-heading">
             <button class="document-breadcrumb" type="button" data-action="reveal-folder" data-testid="breadcrumb-button" title="${t('revealDocument')}"><span class="document-kicker"></span></button>
-            <h1 class="document-title"></h1>
+            <button class="document-title" data-action="document-menu" aria-haspopup="menu"></button><span class="document-save-state"></span>
           </div>
           <div class="document-actions">
             <div class="view-controls" role="group" aria-label="Ansicht">
@@ -340,16 +353,22 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
           <button class="primary-action compact-action" type="submit" data-testid="assistant-run">${t('assistantRun')}</button>
         </form>
       </aside>
-      <button class="floating-assistant ${assistantOpen ? 'active' : ''}" type="button" data-action="toggle-assistant" data-testid="assistant-fab" aria-controls="assistant-panel" aria-expanded="${assistantOpen}" title="${t('assistant')}" aria-label="${t('assistant')}">${iconMarkup(botIcon)}</button>
+
+      <div class="document-footer"><span class="word-count"></span><span class="preview-label hidden">${t('previewOnly')}</span></div>
       <div class="statusbar" role="status" aria-live="polite"><span class="status-message"></span></div>
     </main>
   `;
   restoreSidebar(root);
   applyTheme();
+  void window.markdownMagic.setAppLanguage(locale);
 
+  const header = root.querySelector('.document-header');
+  const top = root.querySelector('.workspace-top');
+  if (header && top) top.prepend(header);
   bindWorkspaceElements(root);
   boundRoot = root;
   bindEvents(root);
+  beforeCloseUnsubscribe = window.markdownMagic.onBeforeClose(async () => ({ ok: await flushAllSessions(), error: statusError ? elements?.statusMessage.textContent ?? undefined : undefined }));
   const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
   rootAbortController?.signal.addEventListener('abort', () => colorSchemeQuery.removeEventListener('change', handleColorSchemeChange));
   colorSchemeQuery.addEventListener('change', handleColorSchemeChange);
@@ -368,12 +387,13 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
     render();
     await loadActiveTab();
     render();
-    if (!onboardingCompleted) showOnboarding();
+    await refreshDrafts();
   } catch (error) {
     render();
     setStatus(errorMessage(error, t('workspaceLoadFailed')), true);
-    if (!onboardingCompleted) showOnboarding();
+    await refreshDrafts();
   }
+  await window.markdownMagic.rendererReady();
 }
 
 function bindWorkspaceElements(root: HTMLElement): void {
@@ -551,12 +571,14 @@ function renderCommandPaletteResults(input: HTMLInputElement, list: HTMLElement)
     return `
       <li class="command-section" role="presentation">${escapeHtml(section.label)}</li>
       ${sectionItems.map(({ item, index }) => `
-        <li role="option" aria-selected="${index === commandPaletteSelectedIndex}" class="command-result ${index === commandPaletteSelectedIndex ? 'active' : ''}" data-command-index="${index}">
+        <li id="command-result-${index}" role="option" aria-selected="${index === commandPaletteSelectedIndex}" class="command-result ${index === commandPaletteSelectedIndex ? 'active' : ''}" data-command-index="${index}">
           <span class="command-title">${escapeHtml(item.title)}</span>
           ${item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ''}
         </li>`).join('')}
     `;
   }).join('') : `<li class="command-empty">${t('commandPaletteEmpty')}</li>`;
+  if (items.length) input.setAttribute('aria-activedescendant', `command-result-${commandPaletteSelectedIndex}`);
+  else input.removeAttribute('aria-activedescendant');
   (list as unknown as { __items?: CommandPaletteItem[] }).__items = items;
 }
 
@@ -575,9 +597,9 @@ function showCommandPalette(): void {
   palette.setAttribute('aria-label', t('commandPalette'));
   palette.innerHTML = `
     <div class="command-input-wrap"><span aria-hidden="true">${iconMarkup(searchIcon)}</span>
-      <input class="command-input" data-testid="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="${t('commandPalettePlaceholder')}" aria-label="${t('commandPalette')}" />
+      <input class="command-input" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="command-results" data-testid="command-palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="${t('commandPalettePlaceholder')}" aria-label="${t('commandPalette')}" />
     </div>
-    <ul class="command-results" data-testid="command-palette-results" role="listbox" aria-label="${t('commandPalette')}"></ul>
+    <ul id="command-results" class="command-results" data-testid="command-palette-results" role="listbox" aria-label="${t('commandPalette')}"></ul>
   `;
   commandPaletteDismiss = mountDialog(backdrop, palette);
   const input = palette.querySelector<HTMLInputElement>('.command-input')!;
@@ -716,7 +738,7 @@ function showOnboarding(): void {
       try {
         const result = await window.markdownMagic.createSampleProject();
         if (!result.ok || !result.state || !result.files) throw new Error(result.error);
-        state = normalizeState(result.state);
+        state = mergeIncomingState(result.state);
         files = result.files;
         if (elements) await loadFileTree();
       } catch (error) {
@@ -742,8 +764,9 @@ async function chooseFolderFromOnboarding(): Promise<void> {
   try {
     const result = await window.markdownMagic.chooseFolder();
     if (!result.ok || !result.state || !result.files) return;
-    state = normalizeState(result.state);
+    state = mergeIncomingState(result.state);
     files = result.files;
+    libraryView = 'places';
     await resetNavigationView(result.state.rootPath);
     rememberRecentFolder(result.state.rootPath);
     await persistState();
@@ -764,6 +787,8 @@ function applyStoredViewPreferences(): void {
 }
 
 function cleanupWorkspace(): void {
+  beforeCloseUnsubscribe?.();
+  beforeCloseUnsubscribe = undefined;
   window.clearTimeout(saveTimer);
   window.clearTimeout(statusDismissTimer);
   window.clearTimeout(fileSearchTimer);
@@ -844,6 +869,19 @@ function bindEvents(root: HTMLElement): void {
     }, listenerOptions);
   });
   bindSidebarResizer(root, listenerOptions);
+  elements?.editorHost.addEventListener('dragover', (event) => { if (event.dataTransfer?.types.includes('Files')) event.preventDefault(); }, listenerOptions);
+  elements?.editorHost.addEventListener('drop', (event) => {
+    const images = [...(event.dataTransfer?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+    if (!images.length) return;
+    event.preventDefault(); event.stopPropagation();
+    for (const file of images) void insertImageFile(file);
+  }, { ...listenerOptions, capture: true });
+  elements?.editorHost.addEventListener('paste', (event) => {
+    const images = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+    if (!images.length) return;
+    event.preventDefault(); event.stopPropagation();
+    for (const file of images) void insertImageFile(file);
+  }, { ...listenerOptions, capture: true });
   root.addEventListener('click', (event) => {
     if (suppressClickAfterDrag) {
       suppressClickAfterDrag = false;
@@ -862,6 +900,17 @@ function bindEvents(root: HTMLElement): void {
       editGroup(editedGroupId);
       return;
     }
+    const library = target.closest<HTMLElement>('[data-library-view]')?.dataset.libraryView;
+    if (library && ['recent', 'drafts', 'favorites', 'places'].includes(library)) {
+      libraryView = library as typeof libraryView;
+      void refreshDrafts();
+      renderFileList();
+      return;
+    }
+    const draftPath = target.closest<HTMLElement>('[data-draft-path]')?.dataset.draftPath;
+    if (draftPath) { void openDraft(draftPath); return; }
+    const place = target.closest<HTMLElement>('[data-open-place]')?.dataset.openPlace;
+    if (place) { void switchToRecentFolder(place); return; }
     const actionTarget = target.closest<HTMLElement>('[data-action]');
     if (actionTarget?.dataset.action) {
       void runAction(actionTarget.dataset.action);
@@ -1054,6 +1103,8 @@ function bindEvents(root: HTMLElement): void {
     documentClickBound = true;
   }
   menuUnsubscribe = window.markdownMagic.onMenuAction((action) => {
+    if (action === 'new-document') void newDocument();
+    if (['save-as', 'rename-document', 'move-document', 'duplicate-document', 'find', 'find-next', 'print', 'export-pdf', 'settings'].includes(action)) void runAction(action);
     if (action === 'save') void saveActiveTab(true);
     if (action === 'open-folder') void chooseFolder();
     if (action === 'open-file') void chooseDocument();
@@ -1081,7 +1132,7 @@ function bindEvents(root: HTMLElement): void {
       setStatus(result.error ?? t('fileOpenFailed'), true);
       return;
     }
-    state = normalizeState(result.state);
+    state = mergeIncomingState(result.state);
     files = result.files;
     rememberRecentFolder(result.state.rootPath);
     await loadFileTree();
@@ -1101,7 +1152,7 @@ function bindEvents(root: HTMLElement): void {
 
 function handleDocumentClick(event: MouseEvent): void {
   const target = event.target instanceof Element ? event.target : null;
-  if (!target?.closest('#tab-menu')) closeTabMenu();
+  if (!target?.closest('#tab-menu, #view-menu, .document-menu, [data-action="document-menu"], [data-action="view-menu"]')) closeTabMenu();
   if (!target?.closest('#folder-manager') && !target?.closest('[data-action="manage-folders"]')) closeFolderManager();
 }
 
@@ -1250,13 +1301,15 @@ function removePointerDragListeners(): void {
 
 async function chooseFolder(): Promise<void> {
   try {
+    await persistState();
     const result = await window.markdownMagic.chooseFolder();
     if (!result.ok || !result.state || !result.files) {
       setStatus(result.error ?? t('folderChooseFailed'), true);
       return;
     }
-    state = normalizeState(result.state);
+    state = mergeIncomingState(result.state);
     files = result.files;
+    libraryView = 'places';
     await resetNavigationView(result.state.rootPath);
     rememberRecentFolder(result.state.rootPath);
     await persistState();
@@ -1292,6 +1345,7 @@ function folderSwitcherMarkup(): string {
 
 async function switchToRecentFolder(path: string): Promise<void> {
   try {
+    await persistState();
     const result = await window.markdownMagic.switchToFolder(path);
     if (!result.ok || !result.state || !result.files) {
       forgetRecentFolder(path);
@@ -1300,7 +1354,7 @@ async function switchToRecentFolder(path: string): Promise<void> {
       renderFileList();
       return;
     }
-    state = normalizeState(result.state);
+    state = mergeIncomingState(result.state);
     files = result.files;
     await resetNavigationView(state.rootPath);
     rememberRecentFolder(state.rootPath);
@@ -1407,12 +1461,13 @@ function updateFolderSwitcher(): void {
 
 async function chooseDocument(): Promise<void> {
   try {
+    await persistState();
     const result = await window.markdownMagic.chooseDocument();
     if (!result.ok || !result.state || !result.files) {
       setStatus(result.error ?? t('fileOpenFailed'), true);
       return;
     }
-    state = normalizeState(result.state);
+    state = mergeIncomingState(result.state);
     files = result.files;
     await loadFileTree();
     rememberRecentFolder(result.state.rootPath);
@@ -1433,12 +1488,12 @@ async function openDocument(path: string): Promise<void> {
     return;
   }
   await saveActiveTab(false);
-  state = next;
+  state = openFile(state, path);
   await persistState();
   render();
   await loadActiveTab();
   const openedTab = state.tabs.find((tab) => tab.id === next.activeTabId);
-  if (openedTab && !openedTab.missing) rememberRecentDocument(path);
+  if (openedTab && !openedTab.missing && !openedTab.draft) rememberRecentDocument(path);
   render();
 }
 
@@ -1488,7 +1543,8 @@ async function activateTab(tabId: string): Promise<void> {
 async function closeDocument(tabId: string): Promise<void> {
   const closingTab = state.tabs.find((tab) => tab.id === tabId);
   if (!closingTab) return;
-  if (closingTab.dirty && !window.confirm(text('closeDirtyConfirm', closingTab.title))) return;
+  const closingSession = sessions.get(tabId);
+  if (closingSession && !await saveSession(closingSession, false)) return;
   rememberClosedTabs([closingTab]);
   if (closingTab.id === state.activeTabId) {
     await saveActiveTab(false);
@@ -1509,7 +1565,7 @@ function rememberClosedTabs(closingTabs: EditorTab[]): void {
     closedTabs.push({
       tab,
       index,
-      content: tab.id === state.activeTabId && activeEditorPath === tab.path ? activeEditor?.getMarkdown() : undefined,
+      content: sessions.get(tab.id)?.content,
     });
   }
   while (closedTabs.length > 30) closedTabs.shift();
@@ -1534,7 +1590,7 @@ async function restoreClosedTab(): Promise<void> {
   await persistState();
   render();
   await loadActiveTab();
-  if (entry.content !== undefined && activeEditorPath === restoredTab.path && activeEditor) {
+  if (!sessions.has(restoredTab.id) && entry.content !== undefined && activeEditorPath === restoredTab.path && activeEditor) {
     suppressEditorChange = true;
     try {
       await activeEditor.setMarkdown(entry.content);
@@ -1553,8 +1609,7 @@ async function closeOtherTabs(tabId: string): Promise<void> {
   if (!keepTab) return;
   const closingTabs = state.tabs.filter((tab) => tab.id !== tabId);
   if (closingTabs.length === 0) return;
-  const dirtyCount = closingTabs.filter((tab) => tab.dirty).length;
-  if (dirtyCount > 0 && !window.confirm(text('closeOthersDirtyConfirm', dirtyCount))) return;
+  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
@@ -1575,8 +1630,7 @@ async function closeOtherTabsInGroup(tabId: string): Promise<void> {
   if (!group) return;
   const closingTabs = state.tabs.filter((tab) => tab.groupId === keepTab.groupId && tab.id !== keepTab.id);
   if (closingTabs.length === 0) return;
-  const dirtyCount = closingTabs.filter((tab) => tab.dirty).length;
-  if (dirtyCount > 0 && !window.confirm(text('closeOthersInGroupDirtyConfirm', dirtyCount, group.name))) return;
+  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
@@ -1596,8 +1650,7 @@ async function closeGroupTabs(groupId: string): Promise<void> {
   const group = state.groups.find((item) => item.id === groupId);
   const closingTabs = state.tabs.filter((tab) => tab.groupId === groupId);
   if (!group || closingTabs.length === 0) return;
-  const dirtyCount = closingTabs.filter((tab) => tab.dirty).length;
-  if (dirtyCount > 0 && !window.confirm(text('closeGroupDirtyConfirm', dirtyCount, group.name))) return;
+  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
@@ -1675,127 +1728,148 @@ function editGroup(groupId: string): void {
   (dialog.elements.namedItem('name') as HTMLInputElement | null)?.focus();
 }
 
-function showNewFileDialog(): void {
-  if (!state.rootPath) {
-    setStatus(t('chooseRootFirst'), true);
-    return;
+async function newDocument(content = ''): Promise<void> {
+  setDocumentViewMode('flow');
+  const result = await window.markdownMagic.createDraft();
+  if (!result.ok || !result.tab) { setStatus(result.error ?? t('createFileFailed'), true); return; }
+  state = { ...state, tabs: [...state.tabs, result.tab], activeTabId: result.tab.id };
+  await persistState();
+  render();
+  await loadActiveTab();
+  const session = sessions.get(result.tab.id);
+  if (content && session?.editor) {
+    await session.editor.setMarkdown(content);
+    handleSessionChange(session, content);
   }
-  document.querySelector<HTMLElement>('#new-file-dialog')?.closest('.dialog-backdrop')?.remove();
-  const backdrop = document.createElement('div');
-  backdrop.className = 'dialog-backdrop';
-  const dialog = document.createElement('form');
-  dialog.id = 'new-file-dialog';
-  dialog.className = 'dialog new-file-dialog';
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'new-file-dialog-title');
-  dialog.innerHTML = `
-    <div class="dialog-header"><div><h2 id="new-file-dialog-title">${t('newFile')}</h2></div><button type="button" class="icon-action" data-cancel aria-label="${t('closeDialog')}">${iconMarkup(closeIcon)}</button></div>
-    <label>${t('newFileName')}<input name="fileName" maxlength="160" required autocomplete="off" spellcheck="false" placeholder="notizen.md" /></label>
-    <p class="dialog-error" role="alert" hidden></p>
-    <div class="dialog-actions"><button type="button" class="ghost-action" data-cancel>${t('cancel')}</button><button type="submit" class="primary-action">${t('create')}</button></div>
-  `;
-  const close = mountDialog(backdrop, dialog);
-  dialog.querySelectorAll('[data-cancel]').forEach((button) => button.addEventListener('click', close));
-  dialog.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const input = dialog.elements.namedItem('fileName') as HTMLInputElement | null;
-    const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const error = dialog.querySelector<HTMLElement>('.dialog-error');
-    const fileName = input?.value.trim() ?? '';
-    if (!fileName) return;
-    if (submit) submit.disabled = true;
-    let result;
-    try {
-      result = await window.markdownMagic.createFile(state.rootPath!, fileName);
-    } catch (createError) {
-      result = { ok: false, error: errorMessage(createError, t('createFileFailed')) };
-    }
-    if (!result.ok || !result.path) {
-      if (error) {
-        error.textContent = result.error ?? t('createFileFailed');
-        error.hidden = false;
-      }
-      input?.setAttribute('aria-invalid', 'true');
-      if (submit) submit.disabled = false;
-      input?.focus();
-      return;
-    }
-    input?.removeAttribute('aria-invalid');
-    const name = result.path.slice(result.path.lastIndexOf('/') + 1);
-    files = [...files.filter((file) => file.path !== result.path), { path: result.path, relativePath: name, name, mtimeMs: Date.now() }]
-      .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-    close();
-    await loadFileTree();
-    await openDocument(result.path);
-  });
-  (dialog.elements.namedItem('fileName') as HTMLInputElement | null)?.focus();
+  await refreshDrafts();
+  render();
+  activeEditor?.focus?.();
+}
+
+function detachActiveSession(): void {
+  const previous = [...sessions.values()].find((item) => item.editor === activeEditor);
+  if (previous) {
+    previous.scrollTop = elements?.editorHost.scrollTop ?? 0;
+    previous.toolbar?.remove();
+    previous.host.remove();
+  }
+  activeEditor = null;
+  activeEditorPath = null;
+  activeEditorMtimeMs = null;
 }
 
 async function loadActiveTab(): Promise<void> {
   const generation = ++loadGeneration;
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
+  detachActiveSession();
   elements?.editorToolbarSlot.replaceChildren();
-  destroyEditor();
+  elements?.editorHost.replaceChildren();
   renderAssistant();
   if (!elements) return;
   elements.emptyState.classList.remove('missing-document-state');
-  elements.emptyState.replaceChildren();
-  if (!activeTab) {
-    elements.emptyState.hidden = false;
-    elements.documentTitle.textContent = '';
-    return;
-  }
+  if (!activeTab) { renderWelcome(); return; }
   elements.emptyState.hidden = true;
-  let result;
-  try {
-    result = await window.markdownMagic.readFile(activeTab.path);
-  } catch (error) {
-    if (generation === loadGeneration) setStatus(errorMessage(error, t('fileLoadFailed')), true);
-    return;
-  }
-  if (generation !== loadGeneration || state.activeTabId !== activeTab.id) return;
-  if (!result.ok || !result.file) {
-    const missing = activeTab.missing || isMissingFileError(result.error);
-    if (!missing) {
-      setStatus(result.error ?? t('fileLoadFailed'), true);
+  let session = sessions.get(activeTab.id);
+  if (!session) {
+    const [result, recovered] = await Promise.all([
+      window.markdownMagic.readFile(activeTab.path).catch((error: unknown) => ({ ok: false, error: errorMessage(error, t('fileLoadFailed')), file: undefined })),
+      window.markdownMagic.readRecovery(activeTab.id),
+    ]);
+    if (generation !== loadGeneration) return;
+    const recovery = recovered.recovery;
+    if (!result.file && !recovery) {
+      state = setTabMissing(state, activeTab.id, true);
+      conflictedPaths.add(activeTab.path);
+      renderMissingDocumentState(activeTab);
+      setStatus(text('missingDocumentDescription', activeTab.title), true);
+      renderConflictCenter();
       return;
     }
-    state = setTabMissing(state, activeTab.id, true);
-    conflictedPaths.add(activeTab.path);
-    await persistState();
-    renderTabs();
-    renderConflictCenter();
-    renderMissingDocumentState(activeTab);
-    return;
-  }
-  if (activeTab.missing) {
-    state = setTabMissing(state, activeTab.id, false);
-    await persistState();
-  }
-  if (activeTab.dirty) {
-    state = setTabDirty(state, activeTab.id, false);
-    await persistState();
-  }
-  suppressEditorChange = true;
-  try {
-    activeEditorPath = activeTab.path;
-    activeEditorMtimeMs = result.file.mtimeMs;
-    const { createMilkdownEditor } = await import('./milkdown-editor');
-    const editor = await createMilkdownEditor(elements.editorHost, result.file.content, handleMarkdownChange, activeTab.path);
-    if (generation !== loadGeneration || state.activeTabId !== activeTab.id) {
-      await editor.destroy();
+    const content = recovery?.content ?? result.file!.content;
+    const host = document.createElement('div');
+    host.className = 'document-session';
+    session = { id: activeTab.id, path: activeTab.path, host, editor: null, toolbar: null,
+      content, savedContent: result.file?.content ?? '', mtime: recovery?.baseMtimeMs ?? result.file?.mtimeMs ?? null,
+      revision: Math.max(Date.now(), recovered.revision ?? 0, recovery?.revision ?? 0), recoveryFloor: recovered.revision ?? 0, savedRevision: recovery ? -1 : 0, scrollTop: 0, recovery: Promise.resolve(true), suppress: true };
+    sessions.set(activeTab.id, session);
+    if (recovery) {
+      state = setTabDirty(state, activeTab.id, content !== result.file?.content);
+      setStatus(t('recoveredDraft'));
+    }
+    if (!result.file || (recovery && recovery.baseMtimeMs !== result.file.mtimeMs)) conflictedPaths.add(activeTab.path);
+    state = setTabMissing(state, activeTab.id, !result.file);
+    const owner = session;
+    host.addEventListener('document-editor-modechange', (event) => {
+      const isSource = (event as CustomEvent<{ isSource: boolean }>).detail?.isSource;
+      if (!isSource) return;
+      owner.toolbar?.remove();
+      owner.toolbar = null;
+      if (state.activeTabId === owner.id) {
+        schedulePagePreview();
+        updateHeader();
+      }
+    });
+    elements.editorHost.append(host);
+    try {
+      owner.editor = await createDocumentEditor(host, content, (markdown) => handleSessionChange(owner, markdown), activeTab.path);
+      owner.toolbar = host.querySelector('.milkdown-top-bar');
+      owner.suppress = false;
+    } catch (error) {
+      sessions.delete(activeTab.id);
+      setStatus(errorMessage(error, t('editorLoadFailed')), true);
       return;
     }
-    activeEditor = editor;
-    const topBar = elements.editorHost.querySelector('.milkdown-top-bar');
-    if (topBar) elements.editorToolbarSlot.append(topBar);
-    schedulePagePreview();
-  } catch (error) {
-    setStatus(errorMessage(error, t('editorLoadFailed')), true);
-  } finally {
-    suppressEditorChange = false;
+    if (generation !== loadGeneration) { host.remove(); return; }
   }
+  activeEditor = session.editor;
+  activeEditorPath = session.path;
+  activeEditorMtimeMs = session.mtime;
+  elements.editorHost.replaceChildren(session.host);
+  if (session.toolbar) elements.editorToolbarSlot.append(session.toolbar);
+  elements.editorHost.scrollTop = session.scrollTop;
+  schedulePagePreview();
+  updateHeader();
+  renderAssistant();
+}
+
+function queueRecovery(session: DocumentSession): Promise<boolean> {
+  if (session.revision <= session.recoveryFloor) session.revision = session.recoveryFloor + 1;
+  const snapshot = { documentId: session.id, path: session.path, content: session.content, baseMtimeMs: session.mtime,
+    revision: session.revision, updatedAt: Date.now() };
+  session.recovery = session.recovery.catch(() => false).then(async () => {
+    try {
+      const result = await window.markdownMagic.writeRecovery(snapshot);
+      if (!result.ok) setStatus(result.error ?? t('saveFailed'), true);
+      return result.ok;
+    } catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); return false; }
+  });
+  return session.recovery;
+}
+
+function handleSessionChange(session: DocumentSession, markdown: string): void {
+  if (session.suppress || markdown === session.content) return;
+  session.content = markdown;
+  session.revision += 1;
+  state = setTabDirty(state, session.id, markdown !== session.savedContent);
+  void queueRecovery(session);
+  window.clearTimeout(session.timer);
+  session.timer = window.setTimeout(() => void saveSession(session, false), 800);
+  renderTabs();
+  updateHeader();
+  schedulePagePreview();
+  void persistState();
+}
+
+async function refreshDrafts(): Promise<void> {
+  const result = await window.markdownMagic.listDrafts();
+  if (result.ok) drafts = result.drafts ?? [];
+  renderFileList();
+}
+
+function renderWelcome(): void {
+  if (!elements) return;
+  elements.emptyState.hidden = false;
+  elements.emptyState.innerHTML = `<div class="welcome-copy"><span class="welcome-icon">${iconMarkup(fileTextIcon)}</span><h2>${t('welcomeTitle')}</h2><p>${t('welcomeDescription')}</p><div class="welcome-actions"><button class="primary-action" data-action="new-file">${iconMarkup(plusIcon)}${t('newFile')}<kbd>⌘N</kbd></button><button class="ghost-action" data-action="open-file">${t('openAnotherFile')}<kbd>⌘O</kbd></button></div><div class="welcome-recents">${recentDocumentsMarkup()}</div></div>`;
 }
 
 function renderMissingDocumentState(tab: EditorTab): void {
@@ -1813,21 +1887,18 @@ function renderMissingDocumentState(tab: EditorTab): void {
   elements.emptyState.hidden = false;
 }
 
-async function handleMarkdownChange(_markdown: string): Promise<void> {
-  if (!state.activeTabId || suppressEditorChange) return;
-  const tab = state.tabs.find((item) => item.id === state.activeTabId);
-  if (!tab) return;
-  state = setTabDirty(state, tab.id, true);
-  renderTabs();
-  updateHeader();
-  if (!tab.dirty) void persistState();
-  queueSave();
-  setStatus(t('unsaved'));
+async function handleMarkdownChange(markdown: string): Promise<void> {
+  const session = state.activeTabId ? sessions.get(state.activeTabId) : undefined;
+  if (session && !suppressEditorChange) handleSessionChange(session, markdown);
 }
 
 function queueSave(): void {
-  window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => void saveActiveTab(false), 800);
+  const session = state.activeTabId ? sessions.get(state.activeTabId) : undefined;
+  if (session) {
+    session.content = session.editor?.getMarkdown() ?? session.content;
+    window.clearTimeout(session.timer);
+    session.timer = window.setTimeout(() => void saveSession(session, false), 800);
+  }
 }
 
 function toggleAssistant(): void {
@@ -1891,8 +1962,8 @@ function renderAssistant(): void {
   const messages = tab ? assistantMessagesByPath.get(tab.path) ?? [] : [];
   const assistantBusy = Boolean(tab && assistantBusyPath === tab.path);
   const diff = assistantProposal ? createLineDiff(assistantProposalBase, assistantProposal.markdown) : [];
-  const truncated = diff.length > 300;
-  const rows = (truncated ? diff.slice(0, 300) : diff).map((row) => `
+  const truncated = false;
+  const rows = diff.map((row) => `
     <div class="diff-line ${row.type}">
       <span aria-hidden="true">${row.type === 'added' ? '+' : row.type === 'removed' ? '−' : ''}</span>
       <code>${escapeHtml(row.text)}</code>
@@ -1988,8 +2059,11 @@ async function applyAssistantProposal(): Promise<void> {
       return;
     }
     checkpointId = checkpoint.entryId;
-    await activeEditor.setMarkdown(pendingProposal.proposal.markdown);
-    assistantUndoByPath.set(tab.path, { checkpointId, applied: contentFingerprint(activeEditor.getMarkdown()) });
+    const session = sessions.get(tab.id);
+    if (!session?.editor || session.content !== pendingProposal.base) { setStatus(t('assistantStale'), true); return; }
+    await session.editor.setMarkdown(pendingProposal.proposal.markdown);
+    handleSessionChange(session, pendingProposal.proposal.markdown);
+    assistantUndoByPath.set(tab.path, { checkpointId, applied: contentFingerprint(pendingProposal.proposal.markdown) });
     persistAssistantUndo();
   } finally {
     suppressEditorChange = false;
@@ -2013,15 +2087,17 @@ async function undoAssistantChange(): Promise<void> {
     return;
   }
   if (contentFingerprint(current) !== snapshot.applied && !window.confirm(text('assistantUndoConfirm', tab.title))) return;
-  const restored = await window.markdownMagic.restoreHistory(tab.path, snapshot.checkpointId);
-  if (!restored.ok || restored.content === undefined || restored.mtimeMs === undefined) {
+  const restored = await window.markdownMagic.readHistory(tab.path, snapshot.checkpointId);
+  if (!restored.ok || restored.content === undefined) {
     setStatus(restored.error ?? t('assistantUndoFailed'), true);
     return;
   }
   suppressEditorChange = true;
   try {
-    await activeEditor.setMarkdown(restored.content);
-    activeEditorMtimeMs = restored.mtimeMs;
+    const session = sessions.get(tab.id);
+    if (!session?.editor) return;
+    await session.editor.setMarkdown(restored.content);
+    handleSessionChange(session, restored.content);
   } finally {
     suppressEditorChange = false;
   }
@@ -2063,88 +2139,97 @@ export function createLineDiff(before: string, after: string): DiffRow[] {
 
 async function saveActiveTab(explicit: boolean): Promise<void> {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
-  if (!tab || !activeEditor || !activeEditorPath || activeEditorPath !== tab.path) return;
-  if (!explicit && !tab.dirty) return;
-  if (activeEditorMtimeMs !== null) {
-    const diskState = await window.markdownMagic.statFile(tab.path);
-    const diskMtimeMs = diskState.ok ? diskState.mtimeMs : undefined;
-    if (diskMtimeMs !== activeEditorMtimeMs) {
-      if (!explicit || !window.confirm(text('overwriteConfirm', tab.title))) {
-        conflictedPaths.add(tab.path);
-        renderTabs();
-        setStatus(t('externalSaveStopped'), true);
-        return;
+  if (!tab) return;
+  if (explicit && (tab.draft || tab.missing)) { await saveDocumentAs('save'); return; }
+  const session = sessions.get(tab.id);
+  if (session) await saveSession(session, explicit);
+}
+
+async function saveSession(session: DocumentSession, explicit: boolean): Promise<boolean> {
+  if (session.editor) handleSessionChange(session, session.editor.getMarkdown());
+  if (session.relocating) { await queueRecovery(session); return false; }
+  if (session.saving) { await session.saving; return saveSession(session, explicit); }
+  if (session.content === session.savedContent && !conflictedPaths.has(session.path)) return true;
+  const tab = state.tabs.find((item) => item.id === session.id);
+  if (!tab) return true;
+  const run = async (): Promise<boolean> => {
+    if (!await queueRecovery(session)) return false;
+    const content = session.content;
+    const revision = session.revision;
+    try {
+      const disk = await window.markdownMagic.statFile(session.path);
+      if (!disk.ok || disk.mtimeMs === undefined) {
+        state = setTabMissing(state, session.id, true);
+        conflictedPaths.add(session.path);
+        setStatus(t('missingLocalCopy'), true);
+        render();
+        return false;
       }
-    }
+      let expected = session.mtime ?? disk.mtimeMs;
+      if (disk.mtimeMs !== expected || conflictedPaths.has(session.path)) {
+        conflictedPaths.add(session.path);
+        renderConflictCenter();
+        if (!explicit) { setStatus(t('externalConflict'), true); return false; }
+        const compared = await window.markdownMagic.readFile(session.path);
+        if (!compared.file) { setStatus(t('conflictLoadFailed'), true); return false; }
+        const accepted = await compareConflict(tab, content, compared.file.content);
+        if (!accepted) return false;
+        expected = compared.file.mtimeMs;
+      }
+      updateHeader();
+      const result = await window.markdownMagic.writeFile(session.path, content, expected);
+      if (!result.ok) {
+        if (result.conflict) { conflictedPaths.add(session.path); renderConflictCenter(); renderTabs(); updateHeader(); }
+        setStatus(result.conflict ? t('externalConflict') : result.error ?? t('saveFailed'), true); return false;
+      }
+      session.mtime = result.mtimeMs ?? expected;
+      session.savedContent = content;
+      session.savedRevision = revision;
+      state = setTabDirty(state, session.id, session.revision !== revision);
+      if (activeEditor === session.editor) activeEditorMtimeMs = session.mtime;
+      conflictedPaths.delete(session.path);
+      state = setTabMissing(state, session.id, false);
+      await session.recovery;
+      await window.markdownMagic.clearRecovery(session.id, revision);
+      session.recoveryFloor = Math.max(session.recoveryFloor, revision);
+      if (session.revision !== revision) await queueRecovery(session);
+      await persistState();
+      resolveStatus();
+      renderTabs(); updateHeader(); renderConflictCenter();
+      return true;
+    } catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); return false; }
+  };
+  session.saving = run();
+  try { return await session.saving; } finally { session.saving = undefined; updateHeader(); }
+}
+
+async function flushAllSessions(): Promise<boolean> {
+  let ok = true;
+  for (const session of sessions.values()) {
+    window.clearTimeout(session.timer);
+    const saved = await saveSession(session, false);
+    if (!saved && !await queueRecovery(session)) ok = false;
+    if (!await session.recovery) ok = false;
   }
-  let result;
-  try {
-    result = await window.markdownMagic.writeFile(tab.path, activeEditor.getMarkdown(), activeEditorMtimeMs ?? undefined);
-  } catch (error) {
-    setStatus(errorMessage(error, t('saveFailed')), true);
-    return;
-  }
-  if (!result.ok) {
-    setStatus(result.error ?? t('saveFailed'), true);
-    return;
-  }
-  state = setTabDirty(state, tab.id, false);
-  activeEditorMtimeMs = result.mtimeMs ?? activeEditorMtimeMs;
-  conflictedPaths.delete(tab.path);
-  await persistState();
-  setStatus(text('savedAt', new Date().toLocaleTimeString(locale === 'de' ? 'de-DE' : 'en-US')));
-  renderTabs();
+  const persisted = await window.markdownMagic.saveWorkspace(state);
+  return ok && persisted.ok;
 }
 
 async function checkExternalChange(): Promise<void> {
-  const tabs = state.tabs;
-  if (tabs.length === 0) return;
-  let statusResult;
-  try {
-    statusResult = await window.markdownMagic.statFiles(tabs.map((item) => item.path));
-  } catch (error) {
-    setStatus(errorMessage(error, t('conflictLoadFailed')), true);
-    return;
-  }
-  if (!statusResult.ok || !statusResult.statuses) {
-    setStatus(statusResult.error ?? t('conflictLoadFailed'), true);
-    return;
-  }
-  const statusesByPath = new Map(statusResult.statuses.map((status) => [status.path, status]));
-  let stateChanged = false;
-  const externallyChangedPaths = new Set<string>();
-
-  for (const tab of tabs) {
-    const diskStatus = statusesByPath.get(tab.path);
-    const missing = Boolean(diskStatus && !diskStatus.exists);
-    if (tab.missing !== missing) {
-      state = setTabMissing(state, tab.id, missing);
-      stateChanged = true;
+  if (!state.tabs.length) return;
+  const result = await window.markdownMagic.statFiles(state.tabs.map((tab) => tab.path));
+  if (!result.ok || !result.statuses) return;
+  for (const tab of state.tabs) {
+    const disk = result.statuses.find((item) => item.path === tab.path);
+    if (!disk) continue;
+    const session = sessions.get(tab.id);
+    state = setTabMissing(state, tab.id, !disk.exists);
+    if (!disk.exists || (session && !session.saving && disk.mtimeMs !== session.mtime)) {
+      conflictedPaths.add(tab.path);
+      if (session) void queueRecovery(session);
     }
-    if (missing) conflictedPaths.add(tab.path);
   }
-
-  const activeTab = tabs.find((item) => item.id === state.activeTabId);
-  const activeStatus = activeTab ? statusesByPath.get(activeTab.path) : undefined;
-  if (activeTab && activeEditor && activeEditorPath === activeTab.path && activeEditorMtimeMs !== null && activeStatus?.exists && activeStatus.mtimeMs !== activeEditorMtimeMs) {
-    conflictedPaths.add(activeTab.path);
-    externallyChangedPaths.add(activeTab.path);
-    if (!activeTab.dirty) {
-      await loadActiveTab();
-      setStatus(t('externalReloaded'));
-      return;
-    }
-    setStatus(t('externalConflict'), true);
-  }
-
-  for (const path of [...conflictedPaths]) {
-    const status = statusesByPath.get(path);
-    if (status?.exists && !externallyChangedPaths.has(path)) conflictedPaths.delete(path);
-  }
-
-  renderTabs();
-  renderConflictCenter();
-  if (stateChanged) await persistState();
+  renderTabs(); renderConflictCenter(); updateHeader();
 }
 
 function conflictedTabs(): WorkspaceState['tabs'] {
@@ -2218,25 +2303,43 @@ async function showConflictCenter(): Promise<void> {
   list.querySelectorAll<HTMLButtonElement>('[data-conflict-disk]').forEach((button) => button.addEventListener('click', async () => {
     const tab = state.tabs.find((item) => item.id === button.dataset.conflictDisk);
     if (!tab || !window.confirm(text('discardConflictConfirm', tab.title))) return;
-    state = setTabDirty(state, tab.id, false);
-    conflictedPaths.delete(tab.path);
-    await persistState();
-    render();
-    if (state.activeTabId === tab.id) await loadActiveTab();
-    close();
-    setStatus(t('reloadedFromDisk'));
+    if (await reloadSessionFromDisk(tab)) { close(); setStatus(t('reloadedFromDisk')); }
   }));
   closeButton.focus();
+}
+
+async function reloadSessionFromDisk(tab: EditorTab): Promise<boolean> {
+  const session = sessions.get(tab.id);
+  if (session) {
+    if (session.saving) await session.saving;
+    if (!await queueRecovery(session)) return false;
+    const checkpoint = await window.markdownMagic.recordAssistantCheckpoint(tab.path, session.content, session.mtime ?? Date.now());
+    if (!checkpoint.ok) { setStatus(checkpoint.error ?? t('saveFailed'), true); return false; }
+  }
+  const result = await window.markdownMagic.readFile(tab.path);
+  if (!result.file) { setStatus(result.error ?? t('fileLoadFailed'), true); return false; }
+  if (session?.editor) {
+    session.suppress = true;
+    try { await session.editor.setMarkdown(result.file.content); }
+    finally { session.suppress = false; }
+    session.content = result.file.content; session.savedContent = result.file.content; session.mtime = result.file.mtimeMs;
+    session.revision += 1; session.savedRevision = session.revision;
+    await window.markdownMagic.clearRecovery(session.id, session.revision);
+    session.recoveryFloor = session.revision;
+    if (activeEditor === session.editor) activeEditorMtimeMs = session.mtime;
+  }
+  state = setTabDirty(setTabMissing(state, tab.id, false), tab.id, false);
+  conflictedPaths.delete(tab.path);
+  await persistState(); resolveStatus(); render();
+  if (!session && state.activeTabId === tab.id) await loadActiveTab();
+  return true;
 }
 
 async function reloadActiveDocument(): Promise<void> {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   if (!tab) return;
-  if (tab.dirty && !window.confirm(text('reloadDirtyConfirm', tab.title))) return;
-  await loadActiveTab();
-  conflictedPaths.delete(tab.path);
-  setStatus(t('reloadedFromDisk'));
-  render();
+  if ((tab.dirty || conflictedPaths.has(tab.path)) && !window.confirm(text('reloadDirtyConfirm', tab.title))) return;
+  if (await reloadSessionFromDisk(tab)) setStatus(t('reloadedFromDisk'));
 }
 
 async function persistState(): Promise<void> {
@@ -2259,8 +2362,8 @@ function render(): void {
 
 function renderGroups(): void {
   if (!elements) return;
+  elements.groupRail.classList.toggle('hidden', state.groups.length === 0);
   elements.groupRail.innerHTML = [
-    `<div class="group-chip unassigned" data-group-id="" title="${t('openFiles')}"><span class="group-text"><strong>${t('unassigned')}</strong></span><span class="group-count">${countUnassigned()}</span></div>`,
     ...state.groups.map((group) => {
       const count = groupTabCount(state, group.id);
       return `<div class="group-chip color-${group.color} ${group.collapsed ? 'collapsed' : ''}" data-group-id="${escapeHtml(group.id)}" title="${t('workspaces')}">
@@ -2278,13 +2381,15 @@ function renderGroups(): void {
 
 function renderTabs(): void {
   if (!elements) return;
+  elements.tabStrip.classList.toggle('hidden', state.tabs.length < 2);
   const visibleTabs = visibleTabsForState(state);
   elements.tabStrip.innerHTML = visibleTabs.length
     ? visibleTabs.map((tab) => {
         const group = state.groups.find((item) => item.id === tab.groupId);
         const conflicted = conflictedPaths.has(tab.path);
         const isActive = tab.id === state.activeTabId;
-        return `<div id="${escapeHtml(tabElementId(tab.id))}" class="tab ${isActive ? 'active' : ''} ${tab.missing ? 'missing' : ''} ${conflicted ? 'conflict' : ''} ${group ? `color-${group.color}` : ''}" data-tab-id="${escapeHtml(tab.id)}" role="tab" tabindex="${isActive ? '0' : '-1'}" aria-selected="${isActive}" aria-controls="document-panel" title="${escapeHtml(tab.path)}"><span class="color-dot ${group ? '' : 'neutral'}" aria-hidden="true"></span><span class="tab-title">${escapeHtml(tab.title)}</span>${tab.dirty ? `<span class="dirty-dot" title="${t('unsaved')}" aria-label="${t('unsaved')}"></span>` : ''}<button class="tab-close" type="button" data-close-tab="${escapeHtml(tab.id)}" aria-label="${escapeHtml(tab.title)}">×</button></div>`;
+        const tabLabel = tab.draft ? sessions.get(tab.id)?.content.trim().split('\n')[0]?.replace(/^#+\s*/, '').slice(0, 70) || t('untitled') : tab.title;
+        return `<div id="${escapeHtml(tabElementId(tab.id))}" class="tab ${isActive ? 'active' : ''} ${tab.missing ? 'missing' : ''} ${conflicted ? 'conflict' : ''} ${group ? `color-${group.color}` : ''}" data-tab-id="${escapeHtml(tab.id)}" role="tab" tabindex="${isActive ? '0' : '-1'}" aria-selected="${isActive}" aria-controls="document-panel" title="${escapeHtml(tab.path)}"><span class="color-dot ${group ? '' : 'neutral'}" aria-hidden="true"></span><span class="tab-title">${escapeHtml(tabLabel)}</span>${tab.dirty ? `<span class="dirty-dot" title="${t('unsaved')}" aria-label="${t('unsaved')}"></span>` : ''}<button class="tab-close" type="button" data-close-tab="${escapeHtml(tab.id)}" aria-label="${escapeHtml(tab.title)}">×</button></div>`;
       }).join('')
     : '';
 }
@@ -2363,6 +2468,7 @@ function showViewMenu(): void {
   `;
   document.body.append(menu);
   positionMenu(menu, rect.left, rect.bottom + 6);
+  button?.setAttribute('aria-expanded', 'true');
   menuDismiss = () => closeViewMenu();
   menu.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
   menu.addEventListener('click', (event) => {
@@ -2454,8 +2560,10 @@ function bindMoveGroupItems(menu: HTMLElement, tabId: string, groupId: string | 
 }
 
 function closeTabMenu(): void {
-  document.querySelector('#tab-menu')?.remove();
+  const dismiss = menuDismiss;
   menuDismiss = undefined;
+  if (dismiss && dismiss !== closeTabMenu) dismiss();
+  document.querySelectorAll('#tab-menu, .document-menu').forEach((menu) => menu.remove());
 }
 
 function queueFileIndex(): void {
@@ -2493,29 +2601,45 @@ async function ensureFileIndex(): Promise<void> {
 
 function renderFileList(): void {
   if (!elements) return;
-  const search = elements.fileSearch.value.trim();
-  if (search || !fileTree) {
-    const indexedFiles = files.length ? files : collectTreeFiles(fileTree);
-    const filtered = filterFiles(indexedFiles, search);
-    const currentFiles = filtered.length ? `<div class="tree-root">${filtered.map((file) => fileRow(file, 0)).join('')}</div>` : '';
-    const recentMatches = recentDocumentsMarkup(search);
-    const selectionToolbar = selectedFiles.size
-      ? `<div class="selection-toolbar"><span>${text('selectedCount', selectedFiles.size)}</span><button class="ghost-action compact-action" data-action="group-selected" data-testid="group-selected-button">${t('groupSelected')}</button><button class="icon-action" data-action="clear-selection" title="${t('clearSelection')}" aria-label="${t('clearSelection')}">${iconMarkup(closeIcon)}</button></div>`
-      : '';
-    const loadingMarkup = fileIndexLoading ? `<div class="file-empty file-index-status" role="status">${t('searchingFiles')}</div>` : '';
-    elements.sidebarList.innerHTML = selectionToolbar + (recentMatches + currentFiles + loadingMarkup || `<div class="file-empty">${t('noFiles')}</div>`);
+  boundRoot?.querySelectorAll<HTMLElement>('[data-library-view]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.libraryView === libraryView);
+    button.setAttribute('aria-current', button.dataset.libraryView === libraryView ? 'page' : 'false');
+    const label = button.querySelector('span');
+    if (label) label.textContent = t(button.dataset.libraryView as 'recent' | 'drafts' | 'favorites' | 'places');
+  });
+  const query = elements.fileSearch.value.trim().toLocaleLowerCase();
+  let markup = '';
+  if (libraryView === 'drafts') {
+    markup = drafts.filter((tab) => `${tab.title} ${sessions.get(tab.id)?.content ?? ''}`.toLocaleLowerCase().includes(query)).map((tab) => {
+      const session = sessions.get(tab.id);
+      const content = session?.content ?? '';
+      const saveLabel = session?.saving ? t('saving') : state.tabs.find((item) => item.id === tab.id)?.dirty ? t('unsaved') : t('savedDraft');
+      const label = content.trim().split('\n')[0]?.replace(/^#+\s*/, '').slice(0, 70) || (tab.title && !/draft-|Untitled|Ohne Titel/i.test(tab.title) ? tab.title : t('untitled'));
+      return `<button type="button" class="draft-item library-document" data-draft-path="${escapeHtml(tab.path)}">${iconMarkup(fileTextIcon)}<span>${escapeHtml(label)}<small>${saveLabel}</small></span></button>`;
+    }).join('');
+  } else if (libraryView === 'recent') {
+    markup = recentDocumentsMarkup(query);
+  } else if (libraryView === 'favorites') {
+    markup = [...pinnedNavigationPaths].filter((path) => path.toLocaleLowerCase().includes(query)).map((path) => `<button class="library-document" data-open-path="${escapeHtml(path)}" title="${escapeHtml(path)}">${iconMarkup(pinIcon)}<span>${escapeHtml(folderName(path))}</span></button>`).join('');
   } else {
-    const pinnedNodes = collectPinnedNodes();
-    const children = (fileTree.children ?? []).map(visibleNode).filter(Boolean) as FileSystemNode[];
-    const pinnedMarkup = pinnedNodes.length
-      ? `<div class="tree-heading">${t('pinnedItems')}</div><div class="tree-root">${pinnedNodes.map((node) => renderTreeNode(node, 0)).join('')}</div>`
-      : '';
-    const treeMarkup = children.length ? `<div class="tree-root">${children.map((node) => renderTreeNode(node, 0)).join('')}</div>` : '';
-    const selectionToolbar = selectedFiles.size
-      ? `<div class="selection-toolbar"><span>${text('selectedCount', selectedFiles.size)}</span><button class="ghost-action compact-action" data-action="group-selected" data-testid="group-selected-button">${t('groupSelected')}</button><button class="icon-action" data-action="clear-selection" title="${t('clearSelection')}" aria-label="${t('clearSelection')}">${iconMarkup(closeIcon)}</button></div>`
-      : '';
-    elements.sidebarList.innerHTML = selectionToolbar + (recentDocumentsMarkup() + pinnedMarkup + treeMarkup || `<div class="file-empty">${t('emptyFolder')}</div>`);
+    const places = recentFolders.filter((folder) => !query || folder.name.toLocaleLowerCase().includes(query));
+    markup = places.map((folder) => `<button class="library-document ${folder.path === state.rootPath ? 'active' : ''}" data-open-place="${escapeHtml(folder.path)}" title="${escapeHtml(folder.path)}">${iconMarkup(folderIcon)}<span>${escapeHtml(folder.name)}</span></button>`).join('');
+    if (state.rootPath) {
+      const tree = query ? filterFiles(files.length ? files : collectTreeFiles(fileTree), query).map((file) => fileRow(file, 0)).join('') : (fileTree?.children ?? []).map(visibleNode).filter((node): node is FileSystemNode => Boolean(node)).map((node) => renderTreeNode(node, 0)).join('');
+      markup += `<div class="tree-heading">${escapeHtml(folderName(state.rootPath))}</div><div class="tree-root">${tree}</div>`;
+      if (selectedFiles.size) markup = `<div class="selection-toolbar"><span>${text('selectedCount', selectedFiles.size)}</span><button class="ghost-action compact-action" data-action="group-selected" data-testid="group-selected-button">${t('groupSelected')}</button></div>` + markup;
+    }
   }
+  elements.sidebarList.innerHTML = markup || `<div class="file-empty">${t(libraryView === 'drafts' ? 'noDrafts' : libraryView === 'favorites' ? 'noFavorites' : libraryView === 'places' ? 'noPlaces' : 'noRecentDocuments')}</div>`;
+}
+
+async function openDraft(path: string): Promise<void> {
+  const existing = state.tabs.find((tab) => tab.path === path);
+  if (existing) { await activateTab(existing.id); return; }
+  const draft = drafts.find((tab) => tab.path === path);
+  if (!draft) return;
+  state = { ...state, tabs: [...state.tabs, draft], activeTabId: draft.id };
+  await persistState(); render(); await loadActiveTab(); render(); activeEditor?.focus?.();
 }
 
 function recentDocumentsMarkup(query = ''): string {
@@ -2720,18 +2844,28 @@ function updateHeader(): void {
   if (!elements) return;
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   const breadcrumb = elements.documentTitle.closest('.document-heading')?.querySelector<HTMLButtonElement>('.document-breadcrumb');
-  elements.documentTitle.textContent = tab?.title ?? '';
+  elements.documentTitle.textContent = tab ? `${tab.draft ? t('untitled') : tab.title} ▾` : '';
+  const session = tab ? sessions.get(tab.id) : undefined;
+  const label = tab ? tab.missing ? t('missingLocalCopy') : conflictedPaths.has(tab.path) ? t('externalConflict') : session?.saving ? t('saving') : tab.dirty ? t('unsaved') : tab.draft ? t('savedDraft') : t('savedFile') : '';
+  const statusLabel = boundRoot?.querySelector('.document-save-state');
+  if (statusLabel) statusLabel.textContent = label;
+  const count = session?.content.trim().split(/\s+/u).filter(Boolean).length ?? 0;
+  const wordCount = boundRoot?.querySelector('.word-count');
+  if (wordCount) wordCount.textContent = text('wordCount', count);
+  void window.markdownMagic.updateDocumentWindow(tab?.draft ? null : tab?.path ?? null, Boolean(tab?.dirty));
   const heading = elements.documentTitle.closest('.document-heading');
   const kicker = heading?.querySelector<HTMLElement>('.document-kicker');
-  if (kicker) kicker.textContent = tab ? compactDocumentLocation(tab.path) : '';
+  if (kicker) kicker.textContent = tab ? tab.draft ? t('drafts') : compactDocumentLocation(tab.path) : '';
   if (breadcrumb) breadcrumb.title = tab ? `${t('revealDocument')}\n${tab.path}` : t('revealDocument');
   const documentPanel = elements.editorHost.closest<HTMLElement>('.document-area');
   if (documentPanel) {
     if (tab) documentPanel.setAttribute('aria-labelledby', tabElementId(tab.id));
     else documentPanel.removeAttribute('aria-labelledby');
   }
-  elements.emptyState.hidden = true;
-  elements.saveButton.disabled = !tab?.dirty;
+  elements.emptyState.hidden = Boolean(tab);
+  if (!tab) renderWelcome();
+  boundRoot?.classList.toggle('no-document', !tab);
+  elements.saveButton.disabled = !tab;
   elements.reloadButton.disabled = !tab;
   elements.historyButton.disabled = !tab;
 }
@@ -2747,6 +2881,7 @@ function compactDocumentLocation(path: string): string {
 
 function applyDocumentView(rerenderControls = true): void {
   if (!elements) return;
+  boundRoot?.querySelector('.preview-label')?.classList.toggle('hidden', documentViewMode !== 'pages');
   elements.editorHost.classList.toggle('page-view', documentViewMode === 'pages');
   elements.editorHost.style.setProperty('--page-columns', String(pageColumns));
   elements.editorHost.dataset.pageColumns = String(pageColumns);
@@ -2770,7 +2905,11 @@ function renderPagePreview(): void {
   if (!elements) return;
   elements.editorHost.querySelector('.page-preview-grid')?.remove();
   if (documentViewMode !== 'pages') return;
-  const source = elements.editorHost.querySelector<HTMLElement>('.document-editor .ProseMirror');
+  let source = elements.editorHost.querySelector<HTMLElement>('.document-editor .ProseMirror');
+  if (!source && activeEditor?.isSource) {
+    source = document.createElement('div');
+    const pre = document.createElement('pre'); pre.textContent = activeEditor.getMarkdown(); source.append(pre);
+  }
   if (!source) return;
 
   const grid = document.createElement('div');
@@ -2854,26 +2993,235 @@ function changeZoom(direction: 'in' | 'out' | 'reset'): void {
 }
 
 function setStatus(message: string, isError = false): void {
-  if (!elements) return;
+  if (!elements || (statusError && !isError)) return;
   elements.statusMessage.textContent = message;
   elements.statusMessage.classList.toggle('is-error', isError);
   elements.status.classList.toggle('is-error', isError);
   elements.status.classList.add('is-visible');
   window.clearTimeout(statusDismissTimer);
-  statusDismissTimer = window.setTimeout(() => elements?.status.classList.remove('is-visible'), isError ? 6200 : 2600);
+  statusError = isError;
+  if (!isError) statusDismissTimer = window.setTimeout(() => elements?.status.classList.remove('is-visible'), 2600);
+}
+
+function resolveStatus(): void {
+  if (conflictedPaths.size) return;
+  statusError = false;
+  elements?.status.classList.remove('is-error', 'is-visible');
 }
 
 function destroyEditor(): void {
-  if (activeEditorPath) conflictedPaths.delete(activeEditorPath);
-  activeEditorPath = null;
-  activeEditorMtimeMs = null;
-  const current = activeEditor;
-  activeEditor = null;
+  detachActiveSession();
+  for (const session of sessions.values()) {
+    window.clearTimeout(session.timer);
+    void session.editor?.destroy();
+  }
+  sessions.clear();
   elements?.editorHost.replaceChildren();
-  void current?.destroy();
+}
+
+function mergeIncomingState(incoming: WorkspaceState): WorkspaceState {
+  const next = normalizeState(incoming);
+  const incomingByPath = new Map(next.tabs.map((tab) => [tab.path, tab]));
+  const tabs = state.tabs.map((tab) => { incomingByPath.delete(tab.path); return tab; });
+  tabs.push(...incomingByPath.values());
+  const targetPath = next.tabs.find((tab) => tab.id === next.activeTabId)?.path;
+  return { ...next, groups: [...state.groups, ...next.groups.filter((group) => !state.groups.some((old) => old.id === group.id))], tabs,
+    activeTabId: tabs.find((tab) => tab.path === targetPath)?.id ?? state.activeTabId };
+}
+
+function suggestedDocumentName(content: string): string {
+  const firstLine = content.split('\n').find((line) => line.trim()) ?? '';
+  const title = firstLine.replace(/^#{1,6}\s+/, '').replace(/[\/\\:*?"<>|\u0000-\u001f]/g, '').trim().slice(0, 80);
+  return title || t('untitled');
+}
+
+async function saveDocumentAs(operation: 'save' | 'move' | 'duplicate'): Promise<void> {
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  const session = tab ? sessions.get(tab.id) : undefined;
+  if (!tab || !session) return;
+  window.clearTimeout(session.timer);
+  if (session.saving) await session.saving;
+  if (session.editor) handleSessionChange(session, session.editor.getMarkdown());
+  if (!await queueRecovery(session)) return;
+  const content = session.content;
+  const revision = session.revision;
+  const oldPath = session.path;
+  session.relocating = true;
+  let result;
+  try {
+    result = await window.markdownMagic.saveDocumentAs({ tabId: tab.id, sourcePath: oldPath, content,
+      suggestedName: tab.draft ? `${suggestedDocumentName(content)}.md` : tab.title, operation });
+  } catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); return; }
+  finally { session.relocating = false; }
+  if (result.canceled) return;
+  if (!result.ok || !result.path) { setStatus(result.error ?? t('saveFailed'), true); return; }
+  if (operation === 'duplicate') { await openDocument(result.path); return; }
+  const path = result.path;
+  session.path = path;
+  session.mtime = result.mtimeMs ?? null;
+  session.savedContent = result.content ?? content;
+  session.savedRevision = revision;
+  if (session.revision === revision && result.content !== undefined && result.content !== session.content) {
+    session.suppress = true;
+    try { await session.editor?.setMarkdown(result.content); session.content = result.content; }
+    finally { session.suppress = false; }
+  }
+  session.editor?.setDocumentPath?.(path);
+  state = { ...state, tabs: state.tabs.map((item) => item.id === tab.id ? { ...item, path, title: folderName(path), draft: false, missing: false, dirty: session.revision !== revision } : item) };
+  if (activeEditor === session.editor) { activeEditorPath = path; activeEditorMtimeMs = session.mtime; }
+  for (const map of [assistantUndoByPath, assistantProposalsByPath, assistantMessagesByPath] as Map<string, unknown>[]) {
+    if (map.has(oldPath)) { map.set(path, map.get(oldPath)); map.delete(oldPath); }
+  }
+  if (pinnedNavigationPaths.delete(oldPath)) { pinnedNavigationPaths.add(path); persistPinnedNavigation(); }
+  conflictedPaths.delete(oldPath);
+  forgetRecentDocument(oldPath);
+  rememberRecentDocument(path);
+  await session.recovery;
+  await window.markdownMagic.clearRecovery(session.id, revision);
+      session.recoveryFloor = Math.max(session.recoveryFloor, revision);
+  if (session.revision !== revision) await queueRecovery(session);
+  await persistState();
+  await refreshDrafts();
+  await loadFileTree();
+  resolveStatus(); render();
+}
+
+function showDocumentMenu(): void {
+  const title = elements?.documentTitle;
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  if (!title || !tab) return;
+  closeTabMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tab-menu document-menu';
+  menu.setAttribute('role', 'menu');
+  const actions: [string, TranslationKey][] = [
+    ['save', tab.draft ? 'nameAndSave' : 'save'], ['save-as', 'saveAs'], ['rename-document', 'renameDocument'],
+    ['move-document', 'moveDocument'], ['duplicate-document', 'duplicateDocument'], ['favorite-document', pinnedNavigationPaths.has(tab.path) ? 'unpinItem' : 'pinItem'],
+    ['reveal', 'revealDocument'], ['history', 'history'], ['reload', 'reload'], ['find', 'findDocument'],
+    ['outline', 'outline'], ['insert-image', 'insertImage'], ['copy-markdown', 'copyMarkdown'], ['copy-formatted', 'copyFormatted'],
+    ['export-pdf', 'exportPDF'], ['print', 'printDocument'], ['new-group', 'newGroup'], ['close-document', 'closeDocument'],
+  ];
+  menu.innerHTML = actions.map(([action, label]) => `<button type="button" role="menuitem" data-document-action="${action}">${t(label)}</button>`).join('');
+  document.body.append(menu);
+  const rect = title.getBoundingClientRect();
+  positionMenu(menu, rect.left, rect.bottom + 6);
+  menu.addEventListener('click', (event) => {
+    const action = eventElement(event)?.closest<HTMLElement>('[data-document-action]')?.dataset.documentAction;
+    if (action) { closeTabMenu(); void runAction(action); }
+  });
+  const dismiss = (event: Event): void => { if (!menu.contains(event.target as Node) && !title.contains(event.target as Node)) closeTabMenu(); };
+  const keydown = (event: KeyboardEvent): void => { if (event.key === 'Escape') { closeTabMenu(); title.focus(); } };
+  document.addEventListener('pointerdown', dismiss);
+  document.addEventListener('keydown', keydown);
+  menuDismiss = () => { menu.remove(); document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', keydown); };
+  menu.querySelector<HTMLButtonElement>('button')?.focus();
+}
+
+function showFind(): void {
+  if (!activeEditor || !elements) return;
+  let bar = boundRoot?.querySelector<HTMLElement>('.find-bar');
+  if (!bar) {
+    bar = document.createElement('div'); bar.className = 'find-bar'; bar.setAttribute('role', 'search');
+    bar.innerHTML = `<input type="search" data-testid="find-input" aria-label="${t('findDocument')}" placeholder="${t('findDocument')}"><span class="find-count" role="status"></span><button class="icon-action" data-find-next aria-label="${t('findNext')}">↓</button><input data-testid="replace-input" aria-label="${t('replaceWith')}" placeholder="${t('replaceWith')}"><button class="ghost-action" data-action="replace-one">${t('replace')}</button><button class="ghost-action" data-action="replace-all">${t('replaceAll')}</button><button class="icon-action" data-find-close aria-label="${t('close')}">${iconMarkup(closeIcon)}</button>`;
+    elements.editorHost.parentElement?.insertBefore(bar, elements.editorHost);
+    bar.querySelector('[data-find-close]')?.addEventListener('click', () => { bar?.remove(); activeEditor?.focus?.(); });
+    bar.querySelector('[data-find-next]')?.addEventListener('click', () => findNext());
+    bar.querySelector('input')?.addEventListener('input', () => { findNext(); bar?.querySelector<HTMLInputElement>('input')?.focus(); });
+    bar.addEventListener('keydown', (event) => { if (event.key === 'Escape') { bar?.remove(); activeEditor?.focus?.(); } if (event.key === 'Enter') { event.preventDefault(); findNext(event.shiftKey); } });
+  }
+  bar.querySelector<HTMLInputElement>('[data-testid="find-input"]')?.focus();
+}
+
+function findNext(backwards = false): void {
+  const input = boundRoot?.querySelector<HTMLInputElement>('[data-testid="find-input"]');
+  if (!input) { showFind(); return; }
+  const result = activeEditor?.find?.(input.value, backwards);
+  const counter = boundRoot?.querySelector('.find-count');
+  if (counter) counter.textContent = result ? `${result.index} / ${result.count}` : '0 / 0';
+}
+
+function replaceFound(all: boolean): void {
+  const query = boundRoot?.querySelector<HTMLInputElement>('[data-testid="find-input"]')?.value ?? '';
+  const replacement = boundRoot?.querySelector<HTMLInputElement>('[data-testid="replace-input"]')?.value ?? '';
+  if (!query) return;
+  activeEditor?.replace?.(query, replacement, all);
+  findNext();
+}
+
+function showOutline(): void {
+  if (!elements) return;
+  const existing = boundRoot?.querySelector('.outline-panel');
+  if (existing) { existing.remove(); return; }
+  const panel = document.createElement('nav'); panel.className = 'outline-panel'; panel.setAttribute('aria-label', t('outline'));
+  const headings = activeEditor?.getHeadings?.() ?? [];
+  panel.innerHTML = `<div class="outline-heading"><strong>${t('outline')}</strong><button class="icon-action" aria-label="${t('close')}">${iconMarkup(closeIcon)}</button></div>` + (headings.length ? headings.map((heading, index) => `<button class="outline-item" data-heading-index="${index}" style="--heading-level:${heading.level}">${escapeHtml(heading.text)}</button>`).join('') : `<p>${t('noHeadings')}</p>`);
+  panel.querySelector('.icon-action')?.addEventListener('click', () => panel.remove());
+  panel.addEventListener('click', (event) => { const index = eventElement(event)?.closest<HTMLElement>('[data-heading-index]')?.dataset.headingIndex; if (index !== undefined) activeEditor?.jumpToHeading?.(Number(index)); });
+  elements.editorHost.parentElement?.append(panel);
+}
+
+async function insertImage(sourcePath?: string): Promise<void> {
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  if (!tab) return;
+  const session = sessions.get(tab.id);
+  const result = await window.markdownMagic.importImage(tab.path, sourcePath);
+  if (!result.ok) { if (result.error) setStatus(result.error, true); return; }
+  if (result.markdown) session?.editor?.insertText?.(result.markdown);
+}
+
+async function insertImageFile(file: File): Promise<void> {
+  const path = window.markdownMagic.getPathForFile?.(file) ?? '';
+  await insertImage(path || 'clipboard');
+}
+
+async function printDocument(pdf: boolean): Promise<void> {
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  if (!tab || !activeEditor) return;
+  const html = activeEditor.getHTML?.() ?? `<pre>${escapeHtml(activeEditor.getMarkdown())}</pre>`;
+  const result = await window.markdownMagic.printDocument(html, tab.title, pdf);
+  if (!result.ok) setStatus(result.error ?? t('exportFailed'), true);
+}
+
+function compareConflict(tab: EditorTab, local: string, disk: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div'); backdrop.className = 'dialog-backdrop';
+    const dialog = document.createElement('div'); dialog.className = 'dialog comparison-dialog'; dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', t('compareConflict'));
+    dialog.innerHTML = `<h2>${t('compareConflict')}</h2><p>${escapeHtml(tab.title)}</p><div class="comparison-columns"><section><h3>${t('localVersion')}</h3><pre>${escapeHtml(local)}</pre></section><section><h3>${t('diskVersion')}</h3><pre>${escapeHtml(disk)}</pre></section></div><div class="dialog-actions"><button class="ghost-action" data-compare-cancel>${t('cancel')}</button><button class="primary-action" data-overwrite-confirm>${t('overwriteCompared')}</button></div>`;
+    const close = mountDialog(backdrop, dialog, { dismissible: false });
+    const cancel = (): void => { close(); resolve(false); };
+    const cancelButton = dialog.querySelector<HTMLButtonElement>('[data-compare-cancel]');
+    cancelButton?.addEventListener('click', cancel);
+    dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); } });
+    dialog.querySelector('[data-overwrite-confirm]')?.addEventListener('click', () => { close(); resolve(true); });
+    cancelButton?.focus();
+  });
 }
 
 async function runAction(action: string): Promise<void> {
+  try { await performAction(action); }
+  catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); }
+}
+
+async function performAction(action: string): Promise<void> {
+  if (action === 'document-menu') showDocumentMenu();
+  if (action === 'save-as' || action === 'rename-document') await saveDocumentAs(action === 'rename-document' ? 'move' : 'save');
+  if (action === 'move-document') await saveDocumentAs('move');
+  if (action === 'duplicate-document') await saveDocumentAs('duplicate');
+  if (action === 'open-file') await chooseDocument();
+  if (action === 'find') showFind();
+  if (action === 'find-next') findNext();
+  if (action === 'replace-one' || action === 'replace-all') replaceFound(action === 'replace-all');
+  if (action === 'outline') showOutline();
+  if (action === 'copy-markdown' && activeEditor) { await navigator.clipboard.writeText(activeEditor.getMarkdown()); setStatus(t('copied')); }
+  if (action === 'copy-formatted' && activeEditor) {
+    const html = activeEditor.getHTML?.() ?? `<pre>${escapeHtml(activeEditor.getMarkdown())}</pre>`;
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([activeEditor.getMarkdown()], { type: 'text/plain' }) })]);
+    setStatus(t('copied'));
+  }
+  if (action === 'insert-image') await insertImage();
+  if (action === 'print' || action === 'export-pdf') await printDocument(action === 'export-pdf');
+  if (action === 'favorite-document') { const tab = state.tabs.find((item) => item.id === state.activeTabId); if (tab) togglePinnedNavigationPath(tab.path, false); }
+  if (action === 'close-document' && state.activeTabId) await closeDocument(state.activeTabId);
   if (action === 'toggle-language') setLocale(locale === 'de' ? 'en' : 'de');
   if (action === 'cycle-theme') cycleTheme();
   if (action === 'choose-folder') await chooseFolder();
@@ -2925,7 +3273,7 @@ async function runAction(action: string): Promise<void> {
     if (!result.ok) setStatus(result.error ?? t('finderFailed'), true);
   }
   if (action === 'new-file') {
-    showNewFileDialog();
+    await newDocument();
   }
 }
 
@@ -2952,8 +3300,8 @@ export function groupTabCount(workspace: WorkspaceState, groupId: string | null)
 }
 
 function restoreSidebar(root: HTMLElement): void {
-  const storedWidth = Number(window.localStorage.getItem('markdown-magic:sidebar-width') ?? '288');
-  root.style.setProperty('--sidebar-width', `${Math.min(520, Math.max(210, Number.isFinite(storedWidth) ? storedWidth : 288))}px`);
+  const storedWidth = Number(window.localStorage.getItem('markdown-magic:sidebar-width') ?? '230');
+  root.style.setProperty('--sidebar-width', `${Math.min(520, Math.max(210, Number.isFinite(storedWidth) ? storedWidth : 230))}px`);
   if (window.localStorage.getItem('markdown-magic:sidebar-collapsed') === '1') root.classList.add('sidebar-collapsed');
   updateSidebarToggle(root);
 }
@@ -3006,14 +3354,14 @@ function bindSidebarResizer(root: HTMLElement, listenerOptions: AddEventListener
   window.addEventListener('pointerup', stopResizing, listenerOptions);
   window.addEventListener('pointercancel', stopResizing, listenerOptions);
   resizer.addEventListener('dblclick', () => {
-    root.style.setProperty('--sidebar-width', '288px');
-    window.localStorage.setItem('markdown-magic:sidebar-width', '288px');
+    root.style.setProperty('--sidebar-width', '230px');
+    window.localStorage.setItem('markdown-magic:sidebar-width', '230px');
   }, listenerOptions);
   resizer.addEventListener('keydown', (event) => {
-    const current = Number(window.localStorage.getItem('markdown-magic:sidebar-width') ?? '288');
+    const current = Number(window.localStorage.getItem('markdown-magic:sidebar-width') ?? '230');
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Enter') return;
     event.preventDefault();
-    const next = event.key === 'Enter' ? 288 : Math.min(520, Math.max(210, current + (event.key === 'ArrowLeft' ? -16 : 16)));
+    const next = event.key === 'Enter' ? 230 : Math.min(520, Math.max(210, current + (event.key === 'ArrowLeft' ? -16 : 16)));
     root.style.setProperty('--sidebar-width', `${next}px`);
     window.localStorage.setItem('markdown-magic:sidebar-width', String(next));
   }, listenerOptions);
@@ -3023,83 +3371,42 @@ async function showHistory(): Promise<void> {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   if (!tab) return;
   document.querySelector('#history-dialog')?.closest('.dialog-backdrop')?.remove();
-  const backdrop = document.createElement('div');
-  backdrop.className = 'dialog-backdrop';
-  const dialog = document.createElement('div');
-  dialog.id = 'history-dialog';
-  dialog.className = 'dialog history-dialog';
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'history-title');
-  const list = document.createElement('div');
-  list.className = 'history-list';
-  list.innerHTML = `<p class="history-empty">${t('loading')}</p>`;
-  dialog.innerHTML = `
-    <div class="dialog-header"><div><span class="document-kicker">${escapeHtml(tab.title)}</span><h2 id="history-title">${t('historyTitle')}</h2></div><button type="button" class="icon-action" data-cancel aria-label="${t('closeDialog')}">${iconMarkup(closeIcon)}</button></div>
-    <p class="settings-description">${t('historyDescription')}</p>
-  `;
-  dialog.append(list);
-  const actions = document.createElement('div');
-  actions.className = 'dialog-actions';
-  const closeButton = document.createElement('button');
-  closeButton.type = 'button';
-  closeButton.className = 'primary-action';
-  closeButton.dataset.cancel = '';
-  closeButton.textContent = t('close');
-  actions.append(closeButton);
-  dialog.append(actions);
+  const backdrop = document.createElement('div'); backdrop.className = 'dialog-backdrop';
+  const dialog = document.createElement('div'); dialog.id = 'history-dialog'; dialog.className = 'dialog history-dialog';
+  dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'history-title');
+  dialog.innerHTML = `<div class="dialog-header"><h2 id="history-title">${t('historyTitle')}</h2><button class="icon-action" data-cancel aria-label="${t('close')}">${iconMarkup(closeIcon)}</button></div><p>${t('historyDescription')} ${t('historyCurrent')}</p><div class="history-list">${t('loading')}</div><pre class="history-preview" hidden></pre><div class="dialog-actions history-preview-actions" hidden><button class="ghost-action" data-history-copy>${t('openAsCopy')}</button><button class="primary-action" data-history-restore>${t('restoreVersion')}</button></div>`;
   const close = mountDialog(backdrop, dialog);
-  dialog.querySelectorAll('[data-cancel]').forEach((button) => button.addEventListener('click', close));
-  closeButton.focus();
-
+  dialog.querySelector('[data-cancel]')?.addEventListener('click', close);
   const result = await window.markdownMagic.listHistory(tab.path);
-  if (!backdrop.isConnected) return;
-  if (!result.ok || !result.entries) {
-    list.innerHTML = `<p class="history-empty">${result.error ?? t('fileLoadFailed')}</p>`;
-    return;
-  }
-  if (result.entries.length === 0) {
-    list.innerHTML = `<p class="history-empty">${t('noHistory')}</p>`;
-    return;
-  }
-  const dateFormatter = new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
-  list.innerHTML = result.entries.map((entry) => `
-    <div class="history-item">
-      <div>
-        <strong>${dateFormatter.format(new Date(entry.timestamp))}</strong>
-        <small>${entry.reason === 'before-restore' ? t('restoreVersion') : text('savedAt', dateFormatter.format(new Date(entry.timestamp)))}</small>
-      </div>
-      <button class="ghost-action" type="button" data-restore-id="${escapeHtml(entry.id)}"><span>${iconMarkup(restoreIcon)}</span><span>${t('restoreVersion')}</span></button>
-    </div>
-  `).join('');
-  list.querySelectorAll<HTMLButtonElement>('[data-restore-id]').forEach((button) => button.addEventListener('click', async () => {
-    const entryId = button.dataset.restoreId ?? '';
-    for (const restoreButton of list.querySelectorAll<HTMLButtonElement>('[data-restore-id]')) restoreButton.disabled = true;
-    const restored = await window.markdownMagic.restoreHistory(tab.path, entryId);
-    if (!restored.ok) {
-      setStatus(restored.error ?? t('saveFailed'), true);
-      return;
-    }
-    window.clearTimeout(saveTimer);
-    saveTimer = undefined;
+  const list = dialog.querySelector<HTMLElement>('.history-list')!;
+  if (!result.entries?.length) { list.textContent = result.error ?? t('noHistory'); return; }
+  const formatter = new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  list.innerHTML = result.entries.map((entry) => `<div class="history-item"><strong>${formatter.format(new Date(entry.timestamp))}</strong><button class="ghost-action" data-history-preview="${escapeHtml(entry.id)}">${t('previewVersion')}</button></div>`).join('');
+  let selectedContent: string | undefined;
+  list.addEventListener('click', async (event) => {
+    const id = eventElement(event)?.closest<HTMLElement>('[data-history-preview]')?.dataset.historyPreview;
+    if (!id) return;
+    const read = await window.markdownMagic.readHistory(tab.path, id);
+    if (!read.ok || read.content === undefined) { setStatus(read.error ?? t('fileLoadFailed'), true); return; }
+    selectedContent = read.content;
+    const preview = dialog.querySelector<HTMLElement>('.history-preview')!;
+    preview.textContent = selectedContent; preview.hidden = false;
+    dialog.querySelector<HTMLElement>('.history-preview-actions')!.hidden = false;
+  });
+  dialog.querySelector('[data-history-copy]')?.addEventListener('click', () => { if (selectedContent !== undefined) { close(); void newDocument(selectedContent); } });
+  dialog.querySelector('[data-history-restore]')?.addEventListener('click', async () => {
+    const session = sessions.get(tab.id);
+    if (selectedContent === undefined || !session?.editor) return;
+    if (!window.confirm(text('reloadDirtyConfirm', tab.title))) return;
+    if (!await queueRecovery(session)) return;
+    const checkpoint = await window.markdownMagic.recordAssistantCheckpoint(tab.path, session.content, session.mtime ?? Date.now());
+    if (!checkpoint.ok) { setStatus(checkpoint.error ?? t('saveFailed'), true); return; }
+    await session.editor.setMarkdown(selectedContent);
+    handleSessionChange(session, selectedContent);
     close();
-    if (activeEditor && activeEditorPath === tab.path && restored.content !== undefined && restored.mtimeMs !== undefined) {
-      suppressEditorChange = true;
-      try {
-        await activeEditor.setMarkdown(restored.content);
-        activeEditorMtimeMs = restored.mtimeMs;
-        state = setTabDirty(state, tab.id, false);
-        conflictedPaths.delete(tab.path);
-      } finally {
-        suppressEditorChange = false;
-      }
-      render();
-    } else {
-      await loadActiveTab();
-      render();
-    }
-    setStatus(t('restoredFromHistory'));
-  }));
+    await saveSession(session, true);
+    render();
+  });
 }
 
 function showSettings(): void {
@@ -3118,12 +3425,15 @@ function showSettings(): void {
     <div class="settings-list">
       <section><strong>${locale === 'de' ? 'Arbeitsbereich' : 'Workspace'}</strong><span title="${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}">${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-folder>${t('chooseFolder')}</button></div></section>
       <section><strong>${t('assistant')}</strong><span>${assistantProviderStatus.connected ? t('assistantProviderChatGPT') : t('assistantProviderOffline')}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-assistant>${locale === 'de' ? 'Chat öffnen' : 'Open chat'}</button><button class="ghost-action" type="button" data-settings-assistant-status>${t('assistantProviderCheck')}</button></div></section>
-      <section><strong>${t('language')} &amp; ${t('appearance')}</strong><span>${locale === 'de' ? 'Deutsch' : 'English'} · ${themeLabel()}</span><span class="settings-note">${locale === 'de' ? 'Beides lässt sich direkt oben im Fenster umschalten.' : 'Both controls are available directly in the window header.'}</span></section>
+      <section><strong>${t('language')} &amp; ${t('appearance')}</strong><span>${locale === 'de' ? 'Deutsch' : 'English'} · ${themeLabel()}</span><div class="settings-actions"><button type="button" class="ghost-action" data-settings-language>${locale === 'de' ? 'English' : 'Deutsch'}</button><button type="button" class="ghost-action" data-settings-theme>${themeLabel()}</button></div></section>
     </div>
-    <div class="dialog-actions"><button type="button" class="primary-action" data-cancel>${t('close')}</button></div>
+    <div class="dialog-actions"><button type="button" class="ghost-action" data-settings-onboarding>${locale === 'de' ? 'Kurze Einführung' : 'Quick introduction'}</button><button type="button" class="primary-action" data-cancel>${t('close')}</button></div>
   `;
   const close = mountDialog(backdrop, dialog);
+  dialog.querySelector('[data-settings-onboarding]')?.addEventListener('click', () => { close(); showOnboarding(); });
   dialog.querySelectorAll('[data-cancel]').forEach((button) => button.addEventListener('click', close));
+  dialog.querySelector('[data-settings-language]')?.addEventListener('click', () => { close(); setLocale(locale === 'de' ? 'en' : 'de'); showSettings(); });
+  dialog.querySelector('[data-settings-theme]')?.addEventListener('click', () => { cycleTheme(); close(); showSettings(); });
   dialog.querySelector('[data-settings-folder]')?.addEventListener('click', () => { close(); void chooseFolder(); });
   dialog.querySelector('[data-settings-assistant]')?.addEventListener('click', () => { close(); toggleAssistant(); });
   dialog.querySelector('[data-settings-assistant-status]')?.addEventListener('click', () => { void refreshAssistantProviderStatus(true).then(showSettings); });
@@ -3243,6 +3553,7 @@ function mountDialog(backdrop: HTMLElement, dialog: HTMLElement, options: { dism
 
 function setLocale(nextLocale: Locale): void {
   locale = nextLocale;
+  void window.markdownMagic.setAppLanguage(locale);
   window.localStorage.setItem('markdown-magic:locale', locale);
   localizeStaticChrome();
   updateHeaderControls();
@@ -3275,7 +3586,7 @@ function localizeStaticChrome(): void {
   if (railLabel) railLabel.textContent = t('workspaces');
   if (emptyText) emptyText.textContent = t('navigationSubtitle');
   if (emptyAction) emptyAction.textContent = t('chooseFolderTitle');
-  if (readyStatus) readyStatus.textContent = t('ready');
+  if (readyStatus && !statusError) readyStatus.textContent = t('ready');
   const tabStrip = root.querySelector<HTMLElement>('.tab-strip');
   if (tabStrip) { tabStrip.setAttribute('aria-label', t('openFiles')); }
   const viewGroup = root.querySelector<HTMLElement>('.view-controls');

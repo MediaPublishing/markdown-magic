@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { writeFileAtomically } from './files';
+import { SerialQueue } from './serial-queue';
 
 export type HistoryReason = 'save' | 'before-restore' | 'assistant-before';
 
@@ -41,9 +42,11 @@ function normalizeIndex(value: unknown, filePath: string): HistoryIndex {
 }
 
 export class HistoryStore {
+  private queue = new SerialQueue();
   constructor(private readonly basePath: string) {}
 
   async record(filePath: string, content: string, mtimeMs: number, reason: HistoryReason): Promise<HistoryEntry> {
+    return this.queue.run(filePath, async () => {
     const entry: HistoryEntry = {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
@@ -57,32 +60,35 @@ export class HistoryStore {
     const nextEntries = [entry, ...index.entries];
     const removedEntries = nextEntries.slice(MAX_HISTORY_ENTRIES);
     index.entries = nextEntries.slice(0, MAX_HISTORY_ENTRIES);
-    for (const removed of removedEntries) {
-      await fs.rm(this.snapshotPath(directory, removed.id), { force: true });
-    }
     await writeFileAtomically(path.join(directory, 'index.json'), `${JSON.stringify(index, null, 2)}\n`);
+    for (const removed of removedEntries) {
+      const archive = path.join(directory, 'archive');
+      await fs.mkdir(archive, { recursive: true });
+      await fs.rename(this.snapshotPath(directory, removed.id), path.join(archive, `${removed.id}.md`));
+    }
     return entry;
+    });
   }
 
   async list(filePath: string): Promise<HistoryEntry[]> {
-    try {
-      const { index } = await this.loadIndex(filePath);
-      return index.entries;
-    } catch {
-      return [];
-    }
+    const { index } = await this.loadIndex(filePath);
+    return index.entries;
   }
 
-  async restore(filePath: string, entryId: string): Promise<{ content: string; mtimeMs: number }> {
+  async read(filePath: string, entryId: string): Promise<string> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entryId)) {
       throw new Error('Ungültiger Historieneintrag.');
     }
     const { directory, index } = await this.loadIndex(filePath);
     if (!index.entries.some((entry) => entry.id === entryId)) throw new Error('Historieneintrag nicht gefunden.');
-    const content = await fs.readFile(this.snapshotPath(directory, entryId), 'utf8');
+    return fs.readFile(this.snapshotPath(directory, entryId), 'utf8');
+  }
+
+  async restore(filePath: string, entryId: string): Promise<{ content: string; mtimeMs: number }> {
+    const content = await this.read(filePath, entryId);
     const currentStats = await fs.stat(filePath);
     await this.record(filePath, await fs.readFile(filePath, 'utf8'), Math.round(currentStats.mtimeMs), 'before-restore');
-    await writeFileAtomically(filePath, content);
+    await writeFileAtomically(filePath, content, Math.round(currentStats.mtimeMs));
     const stats = await fs.stat(filePath);
     return { content, mtimeMs: Math.round(stats.mtimeMs) };
   }
@@ -93,7 +99,8 @@ export class HistoryStore {
     let raw: unknown;
     try {
       raw = JSON.parse(await fs.readFile(path.join(directory, 'index.json'), 'utf8'));
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       raw = null;
     }
     return { directory, index: normalizeIndex(raw, canonicalPath) };
