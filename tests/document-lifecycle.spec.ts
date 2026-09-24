@@ -265,6 +265,41 @@ test('explicit conflict comparison saves chosen local version and retains extern
   } finally { await f.app.close(); }
 });
 
+test('closing a conflicted document offers discard, preserves the disk version, and does not revive discarded text', async () => {
+  const f = await fixture();
+  const alpha = path.join(f.documents, 'Alpha.md');
+  try {
+    await append(f.page, ' LOCAL-UNSAVED');
+    await fs.writeFile(alpha, '# Alpha\n\nEXTERNAL-VERSION\n');
+    await f.page.locator('.tab.active .tab-close').click();
+    const warning = f.page.locator('#close-without-saving-dialog');
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText('außerhalb von Markdown Magic geändert');
+    await f.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(900, 700));
+    await f.page.screenshot({ path: 'receipts/close-conflict-dialog-900.png' });
+    await f.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
+    await f.page.screenshot({ path: 'receipts/close-conflict-dialog-1360.png' });
+    await warning.locator('[data-cancel]').click();
+    await expect(f.page.locator('.tab', { hasText: 'Alpha.md' })).toBeVisible();
+    await expect.poll(() => editorText(f.page)).toContain('LOCAL-UNSAVED');
+
+    await f.page.locator('.tab.active .tab-close').click();
+    await warning.locator('[data-discard]').click();
+    await expect(f.page.locator('.tab', { hasText: 'Alpha.md' })).toHaveCount(0);
+    expect(await fs.readFile(alpha, 'utf8')).toContain('EXTERNAL-VERSION');
+    expect((await f.page.evaluate(id => window.markdownMagic.readRecovery(id), `tab-${encodeURIComponent(alpha)}`)).recovery).toBeUndefined();
+
+    await f.app.close();
+    f.app = await f.launch(); f.page = await f.app.firstWindow();
+    await expect(f.page.locator('.document-title')).toContainText('Beta.md');
+    await f.app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, alpha);
+    await menu(f.app, 'open-file');
+    await expect(f.page.locator('.document-title')).toContainText('Alpha.md');
+    await expect.poll(() => editorText(f.page)).toContain('EXTERNAL-VERSION');
+    expect(await editorText(f.page)).not.toContain('LOCAL-UNSAVED');
+  } finally { await f.app.close(); }
+});
+
 test('move keeps document identity and duplicate creates a separate document', async () => {
   const f = await fixture();
   try {

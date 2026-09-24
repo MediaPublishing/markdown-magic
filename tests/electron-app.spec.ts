@@ -915,9 +915,13 @@ test('keeps compact dark windows readable without global horizontal overflow', a
     };
     const link = document.querySelector<HTMLElement>('.ProseMirror a');
     const documentArea = document.querySelector<HTMLElement>('.document-area');
+    const selectedNavigation = document.querySelector<HTMLElement>('.library-button.active');
     const linkLuminance = luminance(parseColor(getComputedStyle(link!).color));
     const backgroundLuminance = luminance(parseColor(getComputedStyle(documentArea!).backgroundColor));
     const contrast = (Math.max(linkLuminance, backgroundLuminance) + 0.05) / (Math.min(linkLuminance, backgroundLuminance) + 0.05);
+    const navigationText = luminance(parseColor(getComputedStyle(selectedNavigation!).color));
+    const navigationBackground = luminance(parseColor(getComputedStyle(selectedNavigation!).backgroundColor));
+    const navigationContrast = (Math.max(navigationText, navigationBackground) + 0.05) / (Math.min(navigationText, navigationBackground) + 0.05);
     const labelledAction = document.querySelector<HTMLElement>('.document-actions > .ghost-action > span:last-child');
     return {
       viewportWidth: document.documentElement.clientWidth,
@@ -925,12 +929,22 @@ test('keeps compact dark windows readable without global horizontal overflow', a
       bodyWidth: document.body.scrollWidth,
       actionLabelDisplay: labelledAction ? getComputedStyle(labelledAction).display : null,
       contrast,
+      navigationContrast,
     };
   });
   expect(compactMetrics.pageWidth, JSON.stringify(compactMetrics)).toBeLessThanOrEqual(compactMetrics.viewportWidth + 1);
   expect(compactMetrics.bodyWidth, JSON.stringify(compactMetrics)).toBeLessThanOrEqual(compactMetrics.viewportWidth + 1);
   expect(compactMetrics.actionLabelDisplay).toBe('none');
   expect(compactMetrics.contrast, JSON.stringify(compactMetrics)).toBeGreaterThanOrEqual(4.5);
+  expect(compactMetrics.navigationContrast, JSON.stringify(compactMetrics)).toBeGreaterThanOrEqual(4.5);
+
+  await window.locator('[data-library-view="recent"]').click();
+  await expect(window.locator('[data-library-view="recent"]')).toHaveClass(/active/);
+  await window.screenshot({ path: 'receipts/recent-contrast-860-dark.png' });
+  await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
+  await window.screenshot({ path: 'receipts/recent-contrast-1360-dark.png' });
+  await electronApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(860, 560));
+  await openPlaces(window);
 
   await window.locator('[data-action="toggle-sidebar"]').click();
   await expect(window.locator('#app')).toHaveClass(/sidebar-collapsed/);

@@ -562,6 +562,8 @@ body.is-pointer-dragging { cursor: grabbing; user-select: none; }
 .library-button { display: flex; align-items: center; gap: 10px; min-height: 35px; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
 .library-button:hover, .library-document:hover { background: var(--hover); }
 .library-button.active, .library-document.active { background: var(--selected); color: var(--link); }
+body[data-theme="dark"] .library-button.active, body[data-theme="dark"] .library-document.active { background: color-mix(in oklch, var(--accent) 18%, var(--chrome)); color: var(--ink); }
+body[data-theme="dark"] .library-button.active .lucide { color: var(--accent); }
 .library-document { display: flex; align-items: flex-start; gap: 9px; width: 100%; min-height: 36px; padding: 9px 8px; border: 0; border-radius: 5px; background: transparent; text-align: left; cursor: pointer; }
 .library-document > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .library-document small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }

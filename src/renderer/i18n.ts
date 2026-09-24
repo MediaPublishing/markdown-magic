@@ -127,6 +127,12 @@ const messages = {
     viewMenu: 'Ansicht',
     zoomReset: '100 %',
     closeTab: 'Tab schließen',
+    closeWithoutSavingTitle: 'Ungespeicherte Änderungen verwerfen?',
+    closeWithoutSaving: 'Ohne Speichern schließen',
+    closeWithoutSavingDescription: (title: string, conflict: boolean): string => conflict
+      ? `„${title}“ wurde außerhalb von Markdown Magic geändert oder verschoben. Deine ungespeicherten Änderungen in der App gehen verloren. Die Datei auf dem Mac bleibt unverändert.`
+      : `„${title}“ enthält ungespeicherte Änderungen. Wenn du es jetzt schließt, gehen diese Änderungen verloren.`,
+    closeWithoutSavingMultiple: (count: number): string => `${count} Dokumente enthalten ungespeicherte Änderungen. Wenn du sie schließt, gehen diese Änderungen verloren. Extern geänderte Dateien bleiben unverändert.`,
     closeOtherTabs: 'Andere Tabs schließen',
     closeOtherTabsInGroup: 'Andere in Gruppe schließen',
     closeGroup: 'Gruppe schließen',
@@ -397,6 +403,12 @@ const messages = {
     viewMenu: 'View',
     zoomReset: '100%',
     closeTab: 'Close tab',
+    closeWithoutSavingTitle: 'Discard unsaved changes?',
+    closeWithoutSaving: 'Close without saving',
+    closeWithoutSavingDescription: (title: string, conflict: boolean): string => conflict
+      ? `“${title}” was changed or moved outside Markdown Magic. Your unsaved changes in the app will be lost. The file on your Mac stays untouched.`
+      : `“${title}” has unsaved changes. Closing it now will discard those changes.`,
+    closeWithoutSavingMultiple: (count: number): string => `${count} documents have unsaved changes. Closing them will discard those changes. Externally changed files stay untouched.`,
     closeOtherTabs: 'Close other tabs',
     closeOtherTabsInGroup: 'Close others in group',
     closeOthersInGroupDirtyConfirm: (count: number, name: string): string => `${count} other tabs in “${name}” have unsaved changes. Close them anyway?`,

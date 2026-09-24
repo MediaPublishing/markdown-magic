@@ -1543,27 +1543,77 @@ async function activateTab(tabId: string): Promise<void> {
 async function closeDocument(tabId: string): Promise<void> {
   const closingTab = state.tabs.find((tab) => tab.id === tabId);
   if (!closingTab) return;
-  const closingSession = sessions.get(tabId);
-  if (closingSession && !await saveSession(closingSession, false)) return;
+  if (!await prepareTabsForClose([closingTab])) return;
   rememberClosedTabs([closingTab]);
-  if (closingTab.id === state.activeTabId) {
-    await saveActiveTab(false);
-    if (state.tabs.find((tab) => tab.id === tabId)?.dirty) return;
-  }
   conflictedPaths.delete(closingTab.path);
   assistantProposalsByPath.delete(closingTab.path);
   state = closeTab(state, tabId);
   await persistState();
+  resolveStatus();
   render();
   await loadActiveTab();
   render();
+}
+
+async function confirmCloseWithoutSaving(tabs: EditorTab[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const dialog = document.createElement('div');
+    dialog.className = 'dialog';
+    dialog.id = 'close-without-saving-dialog';
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'close-without-saving-title');
+    dialog.setAttribute('aria-describedby', 'close-without-saving-description');
+    const description = tabs.length === 1
+      ? text('closeWithoutSavingDescription', tabs[0]!.title, tabs[0]!.missing || conflictedPaths.has(tabs[0]!.path))
+      : text('closeWithoutSavingMultiple', tabs.length);
+    dialog.innerHTML = `<h2 id="close-without-saving-title">${t('closeWithoutSavingTitle')}</h2>
+      <p id="close-without-saving-description">${escapeHtml(description)}</p>
+      <div class="dialog-actions"><button class="ghost-action" type="button" data-cancel>${t('cancel')}</button>
+      <button class="ghost-action danger-action" type="button" data-discard>${t('closeWithoutSaving')}</button></div>`;
+    const close = mountDialog(backdrop, dialog, { dismissible: false });
+    const finish = (discard: boolean): void => { close(); resolve(discard); };
+    dialog.querySelector('[data-cancel]')?.addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-discard]')?.addEventListener('click', () => finish(true));
+    dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); } });
+    dialog.querySelector<HTMLButtonElement>('[data-cancel]')?.focus();
+  });
+}
+
+async function prepareTabsForClose(tabs: EditorTab[]): Promise<boolean> {
+  const discard: EditorTab[] = [];
+  for (const tab of tabs) {
+    const session = sessions.get(tab.id);
+    if (session?.saving) await session.saving;
+    const hasLocalChanges = tab.dirty || (session !== undefined && session.content !== session.savedContent);
+    if (session && hasLocalChanges && await saveSession(session, false)) continue;
+    if (hasLocalChanges || (session && conflictedPaths.has(tab.path))) discard.push(tab);
+  }
+  const unsaved = discard.filter((tab) => tab.dirty || sessions.get(tab.id)?.content !== sessions.get(tab.id)?.savedContent);
+  if (unsaved.length && !await confirmCloseWithoutSaving(unsaved)) return false;
+  for (const tab of discard) {
+    const session = sessions.get(tab.id);
+    if (session) {
+      window.clearTimeout(session.timer);
+      await session.recovery;
+    }
+    const recovered = await window.markdownMagic.readRecovery(tab.id);
+    if (!recovered.ok) { setStatus(recovered.error ?? t('saveFailed'), true); return false; }
+    const cleared = await window.markdownMagic.clearRecovery(tab.id, Math.max(Date.now(), session?.revision ?? 0, recovered.recovery?.revision ?? 0));
+    if (!cleared.ok) { setStatus(cleared.error ?? t('saveFailed'), true); return false; }
+    if (session) { sessions.delete(tab.id); await session.editor?.destroy(); session.host.remove(); }
+    state = setTabDirty(state, tab.id, false);
+  }
+  return true;
 }
 
 function rememberClosedTabs(closingTabs: EditorTab[]): void {
   for (const tab of [...closingTabs].reverse()) {
     const index = state.tabs.findIndex((item) => item.id === tab.id);
     closedTabs.push({
-      tab,
+      tab: state.tabs[index] ?? tab,
       index,
       content: sessions.get(tab.id)?.content,
     });
@@ -1609,7 +1659,7 @@ async function closeOtherTabs(tabId: string): Promise<void> {
   if (!keepTab) return;
   const closingTabs = state.tabs.filter((tab) => tab.id !== tabId);
   if (closingTabs.length === 0) return;
-  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
+  if (!await prepareTabsForClose(closingTabs)) return;
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
@@ -1630,7 +1680,7 @@ async function closeOtherTabsInGroup(tabId: string): Promise<void> {
   if (!group) return;
   const closingTabs = state.tabs.filter((tab) => tab.groupId === keepTab.groupId && tab.id !== keepTab.id);
   if (closingTabs.length === 0) return;
-  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
+  if (!await prepareTabsForClose(closingTabs)) return;
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
@@ -1650,7 +1700,7 @@ async function closeGroupTabs(groupId: string): Promise<void> {
   const group = state.groups.find((item) => item.id === groupId);
   const closingTabs = state.tabs.filter((tab) => tab.groupId === groupId);
   if (!group || closingTabs.length === 0) return;
-  for (const tab of closingTabs) { const session = sessions.get(tab.id); if (session && !await saveSession(session, false)) return; }
+  if (!await prepareTabsForClose(closingTabs)) return;
   rememberClosedTabs(closingTabs);
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
