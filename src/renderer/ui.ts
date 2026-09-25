@@ -306,7 +306,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
         <header class="document-header">
           <div class="document-heading">
             <button class="document-breadcrumb" type="button" data-action="reveal-folder" data-testid="breadcrumb-button" title="${t('revealDocument')}"><span class="document-kicker"></span></button>
-            <button class="document-title" data-action="document-menu" aria-haspopup="menu"></button><span class="document-save-state"></span>
+            <button class="document-title" data-action="document-menu" aria-haspopup="menu" aria-expanded="false"></button><span class="document-save-state"></span>
           </div>
           <div class="document-actions">
             <button class="editor-mode-action" type="button" data-action="toggle-editor-mode" hidden></button>
@@ -971,12 +971,14 @@ function bindEvents(root: HTMLElement): void {
     if (removeRecentTarget?.dataset.removeRecent) {
       forgetRecentDocument(removeRecentTarget.dataset.removeRecent);
       renderFileList();
+      if (!state.activeTabId) renderWelcome();
       return;
     }
     if (target.closest<HTMLElement>('[data-clear-recents]')) {
       recentDocuments = [];
       persistRecentDocuments();
       renderFileList();
+      if (!state.activeTabId) renderWelcome();
       return;
     }
     const folderSwitcher = target.closest<HTMLSelectElement>('.folder-switcher');
@@ -2433,7 +2435,7 @@ function renderGroups(): void {
 
 function renderTabs(): void {
   if (!elements) return;
-  elements.tabStrip.classList.toggle('hidden', state.tabs.length < 2);
+  elements.tabStrip.classList.toggle('hidden', state.tabs.length === 0);
   const visibleTabs = visibleTabsForState(state);
   elements.tabStrip.innerHTML = visibleTabs.length
     ? visibleTabs.map((tab) => {
@@ -2624,6 +2626,7 @@ function closeTabMenu(): void {
   menuDismiss = undefined;
   if (dismiss && dismiss !== closeTabMenu) dismiss();
   document.querySelectorAll('#tab-menu, .document-menu').forEach((menu) => menu.remove());
+  elements?.documentTitle.setAttribute('aria-expanded', 'false');
 }
 
 function queueFileIndex(): void {
@@ -3176,8 +3179,9 @@ function showDocumentMenu(): void {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   if (!title || !tab) return;
   closeTabMenu();
+  title.setAttribute('aria-expanded', 'true');
   const menu = document.createElement('div');
-  menu.className = 'tab-menu document-menu';
+  menu.className = 'context-menu document-menu';
   menu.setAttribute('role', 'menu');
   const actions: [string, TranslationKey][] = [
     ['save', tab.draft ? 'nameAndSave' : 'save'], ['save-as', 'saveAs'], ['rename-document', 'renameDocument'],
@@ -3290,7 +3294,10 @@ async function runAction(action: string): Promise<void> {
 }
 
 async function performAction(action: string): Promise<void> {
-  if (action === 'document-menu') showDocumentMenu();
+  if (action === 'document-menu') {
+    if (document.querySelector('.document-menu')) closeTabMenu();
+    else showDocumentMenu();
+  }
   if (action === 'save-as' || action === 'rename-document') await saveDocumentAs(action === 'rename-document' ? 'move' : 'save');
   if (action === 'move-document') await saveDocumentAs('move');
   if (action === 'duplicate-document') await saveDocumentAs('duplicate');

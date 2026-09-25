@@ -1,7 +1,7 @@
 {
   "name": "markdown-magic",
   "productName": "Markdown Magic",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A local macOS Markdown workspace with WYSIWYG editing and grouped tabs.",
   "author": "MediaPublishing",
   "private": true,

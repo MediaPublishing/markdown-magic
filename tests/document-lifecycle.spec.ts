@@ -39,6 +39,49 @@ async function stubSave(app: ElectronApplication, target: string | null) {
   await app.evaluate(({ dialog }, value) => { Reflect.set(dialog, 'testSaveDialogCalls', 0); dialog.showSaveDialog = async () => { Reflect.set(dialog, 'testSaveDialogCalls', Number(Reflect.get(dialog, 'testSaveDialogCalls')) + 1); return { canceled: value === null, filePath: value ?? '' }; }; }, target);
 }
 
+test('one document keeps its close button, title menu stays in view, and Clear empties welcome recents', async () => {
+  const f = await fixture({ 'Only.md': '# Only\n\nExample.\n' });
+  try {
+    await expect(f.page.locator('.tab-strip')).toBeVisible();
+    await expect(f.page.locator('.tab-close')).toHaveCount(1);
+    for (const [width, height] of [[900, 700], [1360, 900]] as const) {
+      await f.page.setViewportSize({ width, height });
+      await f.page.locator('.document-title').click();
+      const menu = f.page.locator('.document-menu');
+      await expect(menu).toBeVisible();
+      const bounds = await menu.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { position: getComputedStyle(element).position, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+      });
+      expect(bounds.position).toBe('fixed');
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.top).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(width);
+      expect(bounds.bottom).toBeLessThanOrEqual(height);
+      if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: `receipts/title-menu-${width}.png` });
+      if (width === 900) await f.page.keyboard.press('Escape');
+      else await f.page.locator('.document-title').click();
+      await expect(menu).toHaveCount(0);
+      await expect(f.page.locator('.document-title')).toHaveAttribute('aria-expanded', 'false');
+      if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: `receipts/single-document-${width}.png` });
+    }
+
+    const onlyPath = path.join(f.documents, 'Only.md');
+    await f.page.evaluate((filePath) => window.localStorage.setItem('markdown-magic:recent-documents', JSON.stringify([{ path: filePath, name: 'Only.md', openedAt: Date.now() }])), onlyPath);
+    await f.page.reload();
+    await expect(f.page.locator('.tab-close')).toBeVisible();
+    await f.page.locator('.tab-close').click();
+    await expect(f.page.locator('.welcome-recents .recent-item')).toHaveCount(1);
+    await f.page.locator('.welcome-recents [data-clear-recents]').click();
+    await expect(f.page.locator('.welcome-recents .recent-item')).toHaveCount(0);
+    await expect(f.page.locator('.recent-root .recent-item')).toHaveCount(0);
+    expect(await f.page.evaluate(() => window.localStorage.getItem('markdown-magic:recent-documents'))).toBe('[]');
+    expect(await fs.readFile(onlyPath, 'utf8')).toContain('Example.');
+    await f.page.reload();
+    await expect(f.page.locator('.welcome-recents .recent-item')).toHaveCount(0);
+  } finally { await f.app.close(); }
+});
+
  test('new draft needs no folder or filename, close and restart keep its text', async () => {
   const f = await fixture({}, false);
   try {

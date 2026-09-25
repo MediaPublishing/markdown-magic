@@ -53,7 +53,7 @@ test('opens multiple Markdown documents, edits visually, groups tabs and restore
   await firstWindow.locator('.file-item', { hasText: 'alpha.md' }).click();
   await expect(firstWindow.locator('.tree-root .file-item')).toHaveCount(3);
   await expect(firstWindow.locator('.tab')).toHaveCount(1);
-  await expect(firstWindow.locator('.tab-strip')).toBeHidden();
+  await expect(firstWindow.locator('.tab-strip')).toBeVisible();
   await expect(firstWindow.locator('.document-title')).toContainText('alpha.md');
   await expect(firstWindow.locator('.document-title')).toHaveAttribute('aria-haspopup', 'menu');
   await expect(firstWindow.locator('.ProseMirror h1')).toContainText('Alpha');
@@ -665,7 +665,7 @@ test('creates immediate drafts and keeps the progressive controls centered', asy
   await expect(window.locator('.document-title')).toContainText('Ohne Titel');
   await expect(window.locator('.document-title')).toHaveAttribute('aria-haspopup', 'menu');
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.tab-strip')).toBeHidden();
+  await expect(window.locator('.tab-strip')).toBeVisible();
   await window.keyboard.insertText('Eine Idee, die lokal bleiben soll.');
   await expect.poll(async () => {
     const result = await window.evaluate(() => globalThis.window.markdownMagic.listDrafts());
@@ -1009,7 +1009,7 @@ test('closes other tabs from the tab context menu', async () => {
   await expect(menu.locator('[data-menu-close-group]')).toBeEnabled();
   await menu.locator('[data-menu-close-others]').click();
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.tab-strip')).toBeHidden();
+  await expect(window.locator('.tab-strip')).toBeVisible();
   await expect(window.locator('.tab', { hasText: 'action-beta.md' })).toHaveCount(1);
   await expect(window.locator('.document-title')).toContainText('action-beta.md');
 
@@ -1060,7 +1060,7 @@ test('supports tab close shortcuts and middle click', async () => {
 
   await window.keyboard.press('Shift+Meta+w');
   await expect(window.locator('.tab')).toHaveCount(1);
-  await expect(window.locator('.tab-strip')).toBeHidden();
+  await expect(window.locator('.tab-strip')).toBeVisible();
   await expect(window.locator('.tab', { hasText: 'solo.md' })).toHaveCount(1);
 
   await window.keyboard.press('Meta+w');
