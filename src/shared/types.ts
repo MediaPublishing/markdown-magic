@@ -38,6 +38,7 @@ export type EditorTab = {
   dirty: boolean;
   missing: boolean;
   draft?: boolean;
+  editorMode?: 'visual' | 'source';
 };
 
 export type WorkspaceState = {

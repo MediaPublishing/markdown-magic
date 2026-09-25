@@ -1,8 +1,9 @@
-import { shouldUseSourceEditor } from './editor-content';
+import { isMarkdownDocument, shouldUseSourceEditor, splitFrontmatter } from './editor-content';
 import { createSourceEditor } from './source-editor';
 
 export type FindResult = { count: number; index: number };
 export type DocumentHeading = { text: string; level: number };
+export type EditorMode = 'visual' | 'source';
 
 export type DocumentEditor = {
   getMarkdown(): string;
@@ -16,6 +17,7 @@ export type DocumentEditor = {
   insertText?(text: string): void;
   setDocumentPath?(path?: string): void;
   isSource?: boolean;
+  setMode?(mode: EditorMode): Promise<boolean>;
   destroy(): Promise<void> | void;
 };
 
@@ -24,42 +26,67 @@ export type DocumentEditorFactory = (
   initialMarkdown: string,
   onChange: (markdown: string) => void,
   documentPath?: string,
+  preferredMode?: EditorMode,
 ) => Promise<DocumentEditor>;
 
-/**
- * Creates the safest editor for a document. Non-Markdown files and Markdown
- * extensions which the visual schema cannot round-trip use the source editor.
- */
+/** Keep frontmatter outside the visual schema while editing the Markdown body. */
 export const createDocumentEditor: DocumentEditorFactory = async (
   root,
   initialMarkdown,
   onChange,
   documentPath,
+  preferredMode,
 ) => {
   let currentPath = documentPath;
+  let frontmatter = '';
   const createVisual = async (markdown: string) => {
+    const parts = splitFrontmatter(markdown);
+    frontmatter = parts.prefix;
     const { createVisualMilkdownEditor } = await import('./milkdown-editor');
-    return createVisualMilkdownEditor(root, markdown, onChange, currentPath);
+    return createVisualMilkdownEditor(root, parts.body, (body) => onChange(`${frontmatter}${body}`), currentPath);
   };
-  let current = shouldUseSourceEditor(initialMarkdown, currentPath)
+  let current = preferredMode === 'source' || shouldUseSourceEditor(initialMarkdown, currentPath)
     ? await createSourceEditor(root, initialMarkdown, onChange, currentPath)
     : await createVisual(initialMarkdown);
   let destroyed = false;
 
+  const changeMode = async (mode: EditorMode): Promise<boolean> => {
+    if (current.isSource === (mode === 'source')) return true;
+    const markdown = current.isSource ? current.getMarkdown() : `${frontmatter}${current.getMarkdown()}`;
+    if (mode === 'visual' && (!isMarkdownDocument(currentPath) || shouldUseSourceEditor(markdown, currentPath))) return false;
+    await current.destroy();
+    root.replaceChildren();
+    try {
+      current = mode === 'source'
+        ? await createSourceEditor(root, markdown, onChange, currentPath)
+        : await createVisual(markdown);
+    } catch (error) {
+      root.replaceChildren();
+      current = await createSourceEditor(root, markdown, onChange, currentPath);
+      root.dispatchEvent(new CustomEvent('document-editor-modechange', { detail: { isSource: true } }));
+      throw error;
+    }
+    root.dispatchEvent(new CustomEvent('document-editor-modechange', { detail: { isSource: mode === 'source' } }));
+    return true;
+  };
+
   return {
     get isSource() { return current.isSource; },
-    getMarkdown: () => current.getMarkdown(),
+    getMarkdown: () => current.isSource ? current.getMarkdown() : `${frontmatter}${current.getMarkdown()}`,
     setMarkdown: async (markdown) => {
       if (!current.isSource && shouldUseSourceEditor(markdown, currentPath)) {
-        await current.destroy();
-        root.replaceChildren();
-        current = await createSourceEditor(root, markdown, onChange, currentPath);
-        root.dispatchEvent(new CustomEvent('document-editor-modechange', { detail: { isSource: true } }));
-        onChange(markdown);
+        await changeMode('source');
+        await current.setMarkdown(markdown);
         return;
       }
-      await current.setMarkdown(markdown);
+      if (current.isSource) await current.setMarkdown(markdown);
+      else {
+        const parts = splitFrontmatter(markdown);
+        frontmatter = parts.prefix;
+        await current.setMarkdown(parts.body);
+      }
     },
+    setMode: changeMode,
     focus: () => current.focus?.(),
     getHTML: () => current.getHTML?.() ?? '',
     find: (query, backwards) => current.find?.(query, backwards) ?? { count: 0, index: 0 },

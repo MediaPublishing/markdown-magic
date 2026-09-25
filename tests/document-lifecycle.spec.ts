@@ -300,6 +300,49 @@ test('closing a conflicted document offers discard, preserves the disk version, 
   } finally { await f.app.close(); }
 });
 
+test('frontmatter articles open formatted, keep exact metadata, remember source mode, and copy their local path', async () => {
+  const frontmatter = '---\ntype: ainauten-deep-dive\nstatus: draft\n---\n';
+  const article = `${frontmatter}\n## Jev Deep Dive\n\nOriginal paragraph.\n`;
+  const f = await fixture({ 'Jev Deep Dive.md': article, 'Other.md': '# Other\n' });
+  const articlePath = path.join(f.documents, 'Jev Deep Dive.md');
+  try {
+    await expect(f.page.locator('.ProseMirror h2')).toContainText('Jev Deep Dive');
+    await expect(f.page.locator('.source-editor-input')).toHaveCount(0);
+    await expect(f.page.locator('[data-action="toggle-editor-mode"]')).toHaveText('Quelltext');
+    await f.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(900, 700));
+    await f.page.screenshot({ path: 'receipts/frontmatter-formatted-900.png' });
+    await f.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
+    await f.page.screenshot({ path: 'receipts/frontmatter-formatted-1360.png' });
+
+    await f.page.locator('[data-action="toggle-editor-mode"]').click();
+    await expect(f.page.locator('.source-editor-input')).toHaveValue(article);
+    await f.page.locator('.tab', { hasText: 'Other.md' }).click();
+    await f.page.locator('.tab', { hasText: 'Jev Deep Dive.md' }).click();
+    await expect(f.page.locator('.source-editor-input')).toHaveValue(article);
+
+    await f.page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, 'writeText', {
+        configurable: true,
+        value: async (text: string) => { (window as Window & { copiedPathForTest?: string }).copiedPathForTest = text; },
+      });
+    });
+    await f.page.locator('.tab', { hasText: 'Jev Deep Dive.md' }).click({ button: 'right' });
+    await expect(f.page.locator('#tab-menu [data-menu-copy-path]')).toBeVisible();
+    await f.page.locator('#tab-menu [data-menu-copy-path]').click();
+    await expect.poll(() => f.page.evaluate(() => (window as Window & { copiedPathForTest?: string }).copiedPathForTest)).toBe(articlePath);
+
+    await f.app.close();
+    f.app = await f.launch(); f.page = await f.app.firstWindow();
+    await expect(f.page.locator('.source-editor-input')).toHaveValue(article);
+    await f.page.locator('[data-action="toggle-editor-mode"]').click();
+    await expect(f.page.locator('.ProseMirror h2')).toContainText('Jev Deep Dive');
+    await append(f.page, ' More writing.');
+    await menu(f.app, 'save');
+    await expect.poll(() => fs.readFile(articlePath, 'utf8')).toContain('More writing.');
+    expect(await fs.readFile(articlePath, 'utf8')).toMatch(/^---\ntype: ainauten-deep-dive\nstatus: draft\n---\n/);
+  } finally { await f.app.close(); }
+});
+
 test('move keeps document identity and duplicate creates a separate document', async () => {
   const f = await fixture();
   try {

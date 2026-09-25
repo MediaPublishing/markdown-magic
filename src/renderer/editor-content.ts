@@ -25,6 +25,13 @@ function pathExtension(documentPath?: string): string | null {
   return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : null;
 }
 
+export function splitFrontmatter(markdown: string): { prefix: string; body: string } {
+  const match = markdown.match(/^\uFEFF?(---|\+\+\+)[ \t]*\r?\n([\s\S]*?)\r?\n\1[ \t]*(?:\r?\n|$)/);
+  return match && /^\s*[A-Za-z_][\w.-]*\s*[:=]/m.test(match[2] ?? '')
+    ? { prefix: match[0], body: markdown.slice(match[0].length) }
+    : { prefix: '', body: markdown };
+}
+
 export function hasUnsupportedMarkdown(markdown: string): boolean {
   return unsupportedMarkdownPatterns.some((pattern) => pattern.test(markdown));
 }
@@ -32,8 +39,12 @@ export function hasUnsupportedMarkdown(markdown: string): boolean {
 export function shouldUseSourceEditor(content: string, documentPath?: string): boolean {
   const extension = pathExtension(documentPath);
   if (extension && !markdownExtensions.has(extension)) return true;
+  return hasUnsupportedMarkdown(splitFrontmatter(content).body);
+}
 
-  return hasUnsupportedMarkdown(content);
+export function isMarkdownDocument(documentPath?: string): boolean {
+  const extension = pathExtension(documentPath);
+  return extension === null || markdownExtensions.has(extension);
 }
 
 export type TextMatch = { from: number; to: number };

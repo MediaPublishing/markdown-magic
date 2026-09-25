@@ -4,7 +4,7 @@
 
 Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev/) · [Download 0.2.2 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.2/Markdown-Magic-0.2.2-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.2.2.md)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.2.3 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.3/Markdown-Magic-0.2.3-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.2.3.md)
 
 ![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
@@ -22,6 +22,8 @@ Wenn eine Datei außerhalb der App geändert wurde und du sie mit eigenen ungesp
 
 - Zuletzt, Entwürfe, Favoriten und Orte zum Wiederfinden
 - Visuelles Markdown, mit einer sicheren Quelltextansicht für nicht unterstützte Strukturen und andere Textformate
+- Dokumentbezogener Wechsel zwischen formatierter Bearbeitung und Quelltext; YAML-Metadaten bleiben beim visuellen Bearbeiten erhalten
+- Lokalen Dateipfad direkt aus dem Tab-Kontextmenü kopieren
 - Suchen und Ersetzen, Dokumentgliederung, lokale Bilder
 - Dokumenttitel mit Aktionen zum Benennen, Bewegen, Duplizieren und Anzeigen im Finder
 - Kopieren als Markdown oder formatierten Text; PDF-Export und Drucken
@@ -35,7 +37,7 @@ Wenn eine Datei außerhalb der App geändert wurde und du sie mit eigenen ungesp
 
 ## Installation und Updates
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.2/Markdown-Magic-0.2.2-arm64.dmg).
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.3/Markdown-Magic-0.2.3-arm64.dmg).
 2. `Markdown Magic.app` nach `Programme` ziehen.
 3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
 
@@ -62,7 +64,7 @@ Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test
 
 A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Download 0.2.2 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.2/Markdown-Magic-0.2.2-arm64.dmg) · [Release notes](docs/RELEASE-0.2.2.md)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.2.3 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.3/Markdown-Magic-0.2.3-arm64.dmg) · [Release notes](docs/RELEASE-0.2.3.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
@@ -80,6 +82,8 @@ If a file changed outside the app and you close it with unsaved edits, you can e
 
 - Recent, Drafts, Favorites and Places
 - Visual Markdown with safe source editing for unsupported structures and other text formats
+- Per-document switching between formatted editing and source; YAML frontmatter stays intact during visual edits
+- Copy the local file path directly from a tab's context menu
 - Find and replace, document outline and local images
 - Title actions for naming, moving, duplicating and revealing files
 - Markdown/formatted copy, PDF export and printing
@@ -91,7 +95,7 @@ If a file changed outside the app and you close it with unsaved edits, you can e
 
 ## Install and update
 
-[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.2/Markdown-Magic-0.2.2-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.3/Markdown-Magic-0.2.3-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
 
 **Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
 

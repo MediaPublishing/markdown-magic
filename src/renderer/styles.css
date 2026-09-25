@@ -578,6 +578,10 @@ body[data-theme="dark"] .library-button.active .lucide { color: var(--accent); }
 .document-save-state { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
 .document-breadcrumb { display: none; }
 .document-actions { gap: 4px; flex-shrink: 0; }
+.editor-mode-action { min-height: 27px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: 500 11px/1.2 system-ui; cursor: pointer; }
+.editor-mode-action:hover { background: var(--hover); }
+.editor-mode-action:disabled { color: var(--muted); cursor: not-allowed; }
+.editor-mode-action[hidden] { display: none; }
 .document-actions > [data-action="new-file"], .document-actions > [data-action="reload"], .document-actions > [data-action="history"], .document-actions > [data-action="save"], .document-actions > .view-controls { display: none; }
 .workspace-language, .workspace-theme, .workspace-settings { display: none; }
 .workspace-assistant { flex: 0 0 auto; }

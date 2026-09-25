@@ -59,4 +59,26 @@ describe('visual Milkdown editor', () => {
     expect(editor.getHTML?.()).not.toContain('<script>');
     await editor.destroy();
   });
+
+  it('edits a frontmatter document visually while preserving its metadata and permits source switching', async () => {
+    const original = '---\r\ntype: deep-dive\r\nstatus: draft\r\n---\r\n\r\n## Article\r\n\r\nOriginal.\r\n';
+    const host = document.createElement('div');
+    document.body.append(host);
+    const onChange = vi.fn();
+    const editor = await createDocumentEditor(host, original, onChange, '/notes/article.md');
+
+    expect(editor.isSource).toBe(false);
+    expect(host.querySelector('.ProseMirror')).not.toBeNull();
+    expect(editor.getMarkdown()).toBe(original);
+    expect(await editor.setMode?.('source')).toBe(true);
+    expect(editor.getMarkdown()).toBe(original);
+    expect(host.querySelector('.source-editor-input')).not.toBeNull();
+    expect(await editor.setMode?.('visual')).toBe(true);
+    expect(editor.getMarkdown()).toBe(original);
+
+    editor.insertText?.('More text');
+    expect(editor.getMarkdown()).toMatch(/^---\r\ntype: deep-dive\r\nstatus: draft\r\n---\r\n/);
+    expect(onChange.mock.lastCall?.[0]).toMatch(/^---\r\ntype: deep-dive\r\nstatus: draft\r\n---\r\n/);
+    await editor.destroy();
+  });
 });

@@ -22,6 +22,7 @@ export function normalizeState(input: unknown): WorkspaceState {
         dirty: tab.dirty === true,
         missing: tab.missing === true,
         ...(tab.draft === true ? { draft: true } : {}),
+        editorMode: tab.editorMode === 'source' || tab.editorMode === 'visual' ? tab.editorMode : undefined,
         groupId: tab.groupId && knownGroups.has(tab.groupId) ? tab.groupId : null,
       }))
     : [];

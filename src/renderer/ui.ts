@@ -18,6 +18,7 @@ import type { AssistantProviderStatus } from '../main/codex-assistant';
 import { locales, normalizeLocale, ONBOARDING_STEPS, translate, type Locale, type TranslationKey } from './i18n';
 import type { DocumentEditor } from './document-editor';
 import { createDocumentEditor } from './document-editor';
+import { isMarkdownDocument, shouldUseSourceEditor } from './editor-content';
 import brandMarkUrl from '../../design/brand/markdown-magic-mark.png?url';
 import folderIcon from 'lucide-static/icons/folder-open.svg?raw';
 import searchIcon from 'lucide-static/icons/search.svg?raw';
@@ -308,6 +309,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
             <button class="document-title" data-action="document-menu" aria-haspopup="menu"></button><span class="document-save-state"></span>
           </div>
           <div class="document-actions">
+            <button class="editor-mode-action" type="button" data-action="toggle-editor-mode" hidden></button>
             <div class="view-controls" role="group" aria-label="Ansicht">
               <button class="icon-toggle ${documentViewMode === 'flow' ? 'active' : ''}" data-view-mode="flow" title="${t('editorView')}" aria-label="${t('editorView')}" aria-pressed="${documentViewMode === 'flow'}"><span>${iconMarkup(rowsIcon)}</span></button>
               <button class="icon-toggle ${documentViewMode === 'pages' ? 'active' : ''}" data-view-mode="pages" title="${t('pageView')}" aria-label="${t('pageView')}" aria-pressed="${documentViewMode === 'pages'}"><span>${iconMarkup(columnsIcon)}</span></button>
@@ -1849,19 +1851,19 @@ async function loadActiveTab(): Promise<void> {
     if (!result.file || (recovery && recovery.baseMtimeMs !== result.file.mtimeMs)) conflictedPaths.add(activeTab.path);
     state = setTabMissing(state, activeTab.id, !result.file);
     const owner = session;
-    host.addEventListener('document-editor-modechange', (event) => {
-      const isSource = (event as CustomEvent<{ isSource: boolean }>).detail?.isSource;
-      if (!isSource) return;
+    host.addEventListener('document-editor-modechange', () => {
       owner.toolbar?.remove();
-      owner.toolbar = null;
+      owner.toolbar = host.querySelector('.milkdown-top-bar');
       if (state.activeTabId === owner.id) {
+        elements?.editorToolbarSlot.replaceChildren();
+        if (owner.toolbar) elements?.editorToolbarSlot.append(owner.toolbar);
         schedulePagePreview();
         updateHeader();
       }
     });
     elements.editorHost.append(host);
     try {
-      owner.editor = await createDocumentEditor(host, content, (markdown) => handleSessionChange(owner, markdown), activeTab.path);
+      owner.editor = await createDocumentEditor(host, content, (markdown) => handleSessionChange(owner, markdown), activeTab.path, activeTab.editorMode);
       owner.toolbar = host.querySelector('.milkdown-top-bar');
       owner.suppress = false;
     } catch (error) {
@@ -2472,6 +2474,7 @@ function showTabMenu(tabId: string, x: number, y: number): void {
   menu.innerHTML = `
     <div class="context-label">${escapeHtml(currentTab.title)}</div>
     <button type="button" role="menuitem" data-menu-reveal>${t('revealDocument')}</button>
+    <button type="button" role="menuitem" data-menu-copy-path>${t('copyFilePath')}</button>
     <hr />
     <div class="context-label">${t('workspaces')}</div>
     <button type="button" role="menuitem" data-move-group="">${t('unassigned')}</button>
@@ -2587,6 +2590,13 @@ function bindMoveGroupItems(menu: HTMLElement, tabId: string, groupId: string | 
     if (!tab) return;
     const result = await window.markdownMagic.revealInFinder(tab.path);
     if (!result.ok) setStatus(result.error ?? t('finderFailed'), true);
+  });
+  menu.querySelector('[data-menu-copy-path]')?.addEventListener('click', async () => {
+    closeTabMenu();
+    const tab = state.tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    try { await navigator.clipboard.writeText(tab.path); setStatus(t('pathCopied')); }
+    catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); }
   });
   menu.querySelector('[data-menu-close-tab]')?.addEventListener('click', () => {
     closeTabMenu();
@@ -2896,6 +2906,16 @@ function updateHeader(): void {
   const breadcrumb = elements.documentTitle.closest('.document-heading')?.querySelector<HTMLButtonElement>('.document-breadcrumb');
   elements.documentTitle.textContent = tab ? `${tab.draft ? t('untitled') : tab.title} ▾` : '';
   const session = tab ? sessions.get(tab.id) : undefined;
+  const modeButton = boundRoot?.querySelector<HTMLButtonElement>('[data-action="toggle-editor-mode"]');
+  if (modeButton) {
+    const editor = session?.editor;
+    modeButton.hidden = !tab || !editor || !isMarkdownDocument(tab.path);
+    const nextLabel = editor?.isSource ? t('showFormatted') : t('showSource');
+    modeButton.textContent = nextLabel;
+    modeButton.setAttribute('aria-label', nextLabel);
+    modeButton.disabled = Boolean(tab && editor?.isSource && shouldUseSourceEditor(editor.getMarkdown(), tab.path));
+    modeButton.title = modeButton.disabled ? t('formattedUnavailable') : nextLabel;
+  }
   const label = tab ? tab.missing ? t('missingLocalCopy') : conflictedPaths.has(tab.path) ? t('externalConflict') : session?.saving ? t('saving') : tab.dirty ? t('unsaved') : tab.draft ? t('savedDraft') : t('savedFile') : '';
   const statusLabel = boundRoot?.querySelector('.document-save-state');
   if (statusLabel) statusLabel.textContent = label;
@@ -2918,6 +2938,21 @@ function updateHeader(): void {
   elements.saveButton.disabled = !tab;
   elements.reloadButton.disabled = !tab;
   elements.historyButton.disabled = !tab;
+}
+
+async function toggleActiveEditorMode(): Promise<void> {
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  const session = tab ? sessions.get(tab.id) : undefined;
+  if (!tab || !session?.editor || !isMarkdownDocument(tab.path)) return;
+  const nextMode = session.editor.isSource ? 'visual' : 'source';
+  if (!await session.editor.setMode?.(nextMode)) {
+    setStatus(t('formattedUnavailable'), true);
+    return;
+  }
+  state = { ...state, tabs: state.tabs.map((item) => item.id === tab.id ? { ...item, editorMode: nextMode } : item) };
+  await persistState();
+  updateHeader();
+  session.editor.focus?.();
 }
 
 function compactDocumentLocation(path: string): string {
@@ -3147,7 +3182,9 @@ function showDocumentMenu(): void {
   const actions: [string, TranslationKey][] = [
     ['save', tab.draft ? 'nameAndSave' : 'save'], ['save-as', 'saveAs'], ['rename-document', 'renameDocument'],
     ['move-document', 'moveDocument'], ['duplicate-document', 'duplicateDocument'], ['favorite-document', pinnedNavigationPaths.has(tab.path) ? 'unpinItem' : 'pinItem'],
-    ['reveal', 'revealDocument'], ['history', 'history'], ['reload', 'reload'], ['find', 'findDocument'],
+    ['reveal', 'revealDocument'], ['copy-file-path', 'copyFilePath'],
+    ...(isMarkdownDocument(tab.path) ? [['toggle-editor-mode', activeEditor?.isSource ? 'showFormatted' : 'showSource'] as [string, TranslationKey]] : []),
+    ['history', 'history'], ['reload', 'reload'], ['find', 'findDocument'],
     ['outline', 'outline'], ['insert-image', 'insertImage'], ['copy-markdown', 'copyMarkdown'], ['copy-formatted', 'copyFormatted'],
     ['export-pdf', 'exportPDF'], ['print', 'printDocument'], ['new-group', 'newGroup'], ['close-document', 'closeDocument'],
   ];
@@ -3263,6 +3300,11 @@ async function performAction(action: string): Promise<void> {
   if (action === 'replace-one' || action === 'replace-all') replaceFound(action === 'replace-all');
   if (action === 'outline') showOutline();
   if (action === 'copy-markdown' && activeEditor) { await navigator.clipboard.writeText(activeEditor.getMarkdown()); setStatus(t('copied')); }
+  if (action === 'copy-file-path') {
+    const tab = state.tabs.find((item) => item.id === state.activeTabId);
+    if (tab) { await navigator.clipboard.writeText(tab.path); setStatus(t('pathCopied')); }
+  }
+  if (action === 'toggle-editor-mode') await toggleActiveEditorMode();
   if (action === 'copy-formatted' && activeEditor) {
     const html = activeEditor.getHTML?.() ?? `<pre>${escapeHtml(activeEditor.getMarkdown())}</pre>`;
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([activeEditor.getMarkdown()], { type: 'text/plain' }) })]);

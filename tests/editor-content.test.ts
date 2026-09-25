@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getSourceHeadings, hasUnsupportedMarkdown, shouldUseSourceEditor } from '../src/renderer/editor-content';
+import { getSourceHeadings, hasUnsupportedMarkdown, shouldUseSourceEditor, splitFrontmatter } from '../src/renderer/editor-content';
 
 describe('safe editor selection', () => {
   it('keeps CommonMark and GFM documents in the visual editor', () => {
@@ -35,7 +35,9 @@ describe('safe editor selection', () => {
   it('recognizes frontmatter and unsupported Markdown extensions', () => {
     const frontmatter = '---\r\ntitle: "Exact title"\r\ntags: [one, two]\r\n---\r\n# Heading\r\n';
     expect(hasUnsupportedMarkdown(frontmatter)).toBe(true);
-    expect(shouldUseSourceEditor(frontmatter, '/notes/article.md')).toBe(true);
+    expect(shouldUseSourceEditor(frontmatter, '/notes/article.md')).toBe(false);
+    expect(splitFrontmatter(frontmatter)).toEqual({ prefix: '---\r\ntitle: "Exact title"\r\ntags: [one, two]\r\n---\r\n', body: '# Heading\r\n' });
+    expect(shouldUseSourceEditor(`${frontmatter}<section>Keep exact HTML</section>`, '/notes/article.md')).toBe(true);
     expect(shouldUseSourceEditor('# Note\n\n[[Linked note]]\n', '/notes/wiki.md')).toBe(true);
     expect(shouldUseSourceEditor('# Formula\n\n$e = mc^2$\n', '/notes/math.md')).toBe(true);
   });
