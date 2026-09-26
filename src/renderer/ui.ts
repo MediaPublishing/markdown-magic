@@ -970,15 +970,13 @@ function bindEvents(root: HTMLElement): void {
     const removeRecentTarget = target.closest<HTMLElement>('[data-remove-recent]');
     if (removeRecentTarget?.dataset.removeRecent) {
       forgetRecentDocument(removeRecentTarget.dataset.removeRecent);
-      renderFileList();
-      if (!state.activeTabId) renderWelcome();
+      renderRecentViews();
       return;
     }
     if (target.closest<HTMLElement>('[data-clear-recents]')) {
       recentDocuments = [];
       persistRecentDocuments();
-      renderFileList();
-      if (!state.activeTabId) renderWelcome();
+      renderRecentViews();
       return;
     }
     const folderSwitcher = target.closest<HTMLSelectElement>('.folder-switcher');
@@ -998,6 +996,13 @@ function bindEvents(root: HTMLElement): void {
   }, listenerOptions);
   root.addEventListener('keydown', (event) => {
     const target = eventElement(event);
+    const file = target?.closest<HTMLElement>('[data-open-recent], [data-open-path]');
+    if (file && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
+      event.preventDefault();
+      const rect = file.getBoundingClientRect();
+      showFileMenu(file.dataset.openRecent ?? file.dataset.openPath!, Boolean(file.dataset.openRecent), rect.left, rect.bottom, file);
+      return;
+    }
     const tab = target?.closest<HTMLElement>('[data-tab-id]');
     if (!tab?.dataset.tabId) return;
     if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
@@ -1079,12 +1084,17 @@ function bindEvents(root: HTMLElement): void {
     const target = eventElement(event);
     const tab = target?.closest<HTMLElement>('[data-tab-id]');
     const group = target?.closest<HTMLElement>('[data-group-id]');
+    const recent = target?.closest<HTMLElement>('[data-open-recent]');
+    const file = target?.closest<HTMLElement>('[data-open-path]');
     if (tab?.dataset.tabId) {
       event.preventDefault();
       showTabMenu(tab.dataset.tabId, event.clientX, event.clientY);
     } else if (group?.dataset.groupId) {
       event.preventDefault();
       editGroup(group.dataset.groupId);
+    } else if (recent?.dataset.openRecent || file?.dataset.openPath) {
+      event.preventDefault();
+      showFileMenu(recent?.dataset.openRecent ?? file!.dataset.openPath!, Boolean(recent), event.clientX, event.clientY, recent ?? file);
     }
   }, listenerOptions);
   root.addEventListener('pointerdown', (event) => {
@@ -1156,7 +1166,7 @@ function bindEvents(root: HTMLElement): void {
 
 function handleDocumentClick(event: MouseEvent): void {
   const target = event.target instanceof Element ? event.target : null;
-  if (!target?.closest('#tab-menu, #view-menu, .document-menu, [data-action="document-menu"], [data-action="view-menu"]')) closeTabMenu();
+  if (!target?.closest('#tab-menu, #file-menu, #view-menu, .document-menu, [data-action="document-menu"], [data-action="view-menu"]')) closeTabMenu();
   if (!target?.closest('#folder-manager') && !target?.closest('[data-action="manage-folders"]')) closeFolderManager();
 }
 
@@ -1513,7 +1523,7 @@ async function openRecentDocument(path: string): Promise<void> {
     if (!result.ok || !result.path || !result.name) {
       forgetRecentDocument(path);
       setStatus(t('recentUnavailable'), true);
-      renderFileList();
+      renderRecentViews();
       return;
     }
     if (result.path !== path) forgetRecentDocument(path);
@@ -1530,6 +1540,11 @@ function forgetRecentDocument(path: string): void {
 
 function persistRecentDocuments(): void {
   window.localStorage.setItem('markdown-magic:recent-documents', JSON.stringify(recentDocuments));
+}
+
+function renderRecentViews(): void {
+  renderFileList();
+  if (!state.activeTabId) renderWelcome();
 }
 
 async function activateTab(tabId: string): Promise<void> {
@@ -2493,6 +2508,45 @@ function showTabMenu(tabId: string, x: number, y: number): void {
   bindMoveGroupItems(menu, tabId, group?.id ?? null);
 }
 
+function showFileMenu(path: string, recent: boolean, x: number, y: number, trigger?: HTMLElement | null): void {
+  closeTabMenu();
+  const menu = document.createElement('div');
+  menu.id = 'file-menu';
+  menu.className = 'context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = `
+    <div class="context-label" title="${escapeHtml(path)}">${escapeHtml(folderName(path))}</div>
+    <button type="button" role="menuitem" data-file-menu-action="open">${t('openDocumentItem')}</button>
+    <button type="button" role="menuitem" data-file-menu-action="reveal">${t('revealDocument')}</button>
+    <button type="button" role="menuitem" data-file-menu-action="copy-path">${t('copyFilePath')}</button>
+    ${recent ? `<hr role="separator"><button type="button" role="menuitem" data-file-menu-action="remove">${t('removeRecent')}</button>` : ''}
+  `;
+  positionMenu(menu, x, y);
+  menu.addEventListener('click', (event) => {
+    const action = eventElement(event)?.closest<HTMLElement>('[data-file-menu-action]')?.dataset.fileMenuAction;
+    if (!action) return;
+    closeTabMenu();
+    void (async () => {
+      if (action === 'open') await (recent ? openRecentDocument(path) : openDocument(path));
+      if (action === 'reveal') {
+        const result = await window.markdownMagic.revealInFinder(path);
+        if (!result.ok) setStatus(result.error ?? t('finderFailed'), true);
+      }
+      if (action === 'copy-path') { await navigator.clipboard.writeText(path); setStatus(t('pathCopied')); }
+      if (action === 'remove') { forgetRecentDocument(path); renderRecentViews(); }
+    })().catch((error: unknown) => setStatus(errorMessage(error, t('fileOpenFailed')), true));
+  });
+  const dismiss = (event: Event): void => { if (!menu.contains(event.target as Node)) closeTabMenu(); };
+  const keydown = (event: KeyboardEvent): void => {
+    if (moveMenuFocus(menu, event)) return;
+    if (event.key === 'Escape') { closeTabMenu(); trigger?.focus(); }
+  };
+  document.addEventListener('pointerdown', dismiss);
+  document.addEventListener('keydown', keydown);
+  menuDismiss = () => { menu.remove(); document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', keydown); };
+  menu.querySelector<HTMLButtonElement>('button')?.focus();
+}
+
 function showViewMenu(): void {
   const button = document.querySelector<HTMLButtonElement>('[data-action="view-menu"]');
   const rect = button?.getBoundingClientRect();
@@ -2570,6 +2624,18 @@ function positionMenu(menu: HTMLElement, x: number, y: number): void {
   menu.style.visibility = '';
 }
 
+function moveMenuFocus(menu: HTMLElement, event: KeyboardEvent): boolean {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return false;
+  const items = [...menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not([disabled])')];
+  if (!items.length) return false;
+  event.preventDefault();
+  const current = items.indexOf(document.activeElement as HTMLButtonElement);
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : current < 0 ? (event.key === 'ArrowUp' ? items.length - 1 : 0)
+    : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+  items[next]?.focus();
+  return true;
+}
+
 async function createGroupWithTabs(tabIds: string[], description = t('perDrop')): Promise<void> {
   const id = `group-${state.groups.length + 1}-${Date.now()}`;
   const group: TabGroup = { id, name: `${locale === 'de' ? 'Gruppe' : 'Group'} ${state.groups.length + 1}`, description, icon: '◆', color: groupColors[state.groups.length % groupColors.length]!, collapsed: false };
@@ -2625,7 +2691,7 @@ function closeTabMenu(): void {
   const dismiss = menuDismiss;
   menuDismiss = undefined;
   if (dismiss && dismiss !== closeTabMenu) dismiss();
-  document.querySelectorAll('#tab-menu, .document-menu').forEach((menu) => menu.remove());
+  document.querySelectorAll('#tab-menu, #file-menu, .document-menu').forEach((menu) => menu.remove());
   elements?.documentTitle.setAttribute('aria-expanded', 'false');
 }
 
@@ -2681,7 +2747,7 @@ function renderFileList(): void {
       return `<button type="button" class="draft-item library-document" data-draft-path="${escapeHtml(tab.path)}">${iconMarkup(fileTextIcon)}<span>${escapeHtml(label)}<small>${saveLabel}</small></span></button>`;
     }).join('');
   } else if (libraryView === 'recent') {
-    markup = recentDocumentsMarkup(query);
+    markup = recentDocumentsMarkup(query, true);
   } else if (libraryView === 'favorites') {
     markup = [...pinnedNavigationPaths].filter((path) => path.toLocaleLowerCase().includes(query)).map((path) => `<button class="library-document" data-open-path="${escapeHtml(path)}" title="${escapeHtml(path)}">${iconMarkup(pinIcon)}<span>${escapeHtml(folderName(path))}</span></button>`).join('');
   } else {
@@ -2705,24 +2771,29 @@ async function openDraft(path: string): Promise<void> {
   await persistState(); render(); await loadActiveTab(); render(); activeEditor?.focus?.();
 }
 
-function recentDocumentsMarkup(query = ''): string {
+function recentDocumentsMarkup(query = '', compact = false): string {
   const needle = query.trim().toLocaleLowerCase();
   const matches = !needle ? recentDocuments : recentDocuments.filter((item) => `${item.name} ${item.path}`.toLocaleLowerCase().includes(needle));
   if (!matches.length) return '';
   return `
-    <div class="tree-heading recent-heading"><span>${t('recentDocuments')}</span><button type="button" data-clear-recents>${t('clearRecents')}</button></div>
+    <div class="tree-heading recent-heading"><span>${t(compact ? 'recent' : 'recentDocuments')}</span><button type="button" data-clear-recents>${t('clearRecents')}</button></div>
     <div class="tree-root recent-root">
       ${matches.map((item) => `
         <div class="tree-row recent-row">
           <button class="row-main recent-item" type="button" data-open-recent="${escapeHtml(item.path)}" title="${escapeHtml(item.path)}">
             <span class="node-icon">${iconMarkup(historyIcon)}</span>
-            <span class="node-name">${escapeHtml(item.name)}</span>
+            <span class="recent-text"><span class="node-name">${escapeHtml(item.name)}</span><small class="recent-location">${escapeHtml(recentLocation(item.path))}</small></span>
           </button>
           <button class="row-remove" type="button" data-remove-recent="${escapeHtml(item.path)}" title="${t('removeRecent')}" aria-label="${t('removeRecent')}">${iconMarkup(closeIcon)}</button>
         </div>
       `).join('')}
     </div>
   `;
+}
+
+function recentLocation(path: string): string {
+  const folders = path.slice(0, path.lastIndexOf('/')).split('/').filter(Boolean);
+  return folders.slice(-2).join(' / ');
 }
 
 function visibleNode(node: FileSystemNode): FileSystemNode | null {
@@ -3183,16 +3254,18 @@ function showDocumentMenu(): void {
   const menu = document.createElement('div');
   menu.className = 'context-menu document-menu';
   menu.setAttribute('role', 'menu');
-  const actions: [string, TranslationKey][] = [
-    ['save', tab.draft ? 'nameAndSave' : 'save'], ['save-as', 'saveAs'], ['rename-document', 'renameDocument'],
-    ['move-document', 'moveDocument'], ['duplicate-document', 'duplicateDocument'], ['favorite-document', pinnedNavigationPaths.has(tab.path) ? 'unpinItem' : 'pinItem'],
-    ['reveal', 'revealDocument'], ['copy-file-path', 'copyFilePath'],
-    ...(isMarkdownDocument(tab.path) ? [['toggle-editor-mode', activeEditor?.isSource ? 'showFormatted' : 'showSource'] as [string, TranslationKey]] : []),
-    ['history', 'history'], ['reload', 'reload'], ['find', 'findDocument'],
-    ['outline', 'outline'], ['insert-image', 'insertImage'], ['copy-markdown', 'copyMarkdown'], ['copy-formatted', 'copyFormatted'],
-    ['export-pdf', 'exportPDF'], ['print', 'printDocument'], ['new-group', 'newGroup'], ['close-document', 'closeDocument'],
+  type MenuAction = [string, TranslationKey, string?];
+  const groups: MenuAction[][] = [
+    [['save', tab.draft ? 'nameAndSave' : 'save', '⌘S'], ['close-document', 'closeDocument', '⌘W']],
+    tab.draft ? [] : [['save-as', 'saveAs'], ['rename-document', 'renameDocument'], ['move-document', 'moveDocument'], ['duplicate-document', 'duplicateDocument']],
+    tab.draft ? [] : [
+      ['favorite-document', pinnedNavigationPaths.has(tab.path) ? 'unpinItem' : 'pinItem'],
+      ['reveal', 'revealDocument'], ['copy-file-path', 'copyFilePath'],
+    ],
+    [...(isMarkdownDocument(tab.path) ? [['toggle-editor-mode', activeEditor?.isSource ? 'showFormatted' : 'showSource'] as MenuAction] : []), ['history', 'history'], ['reload', 'reload'], ['outline', 'outline']],
+    [['copy-markdown', 'copyMarkdown'], ['copy-formatted', 'copyFormatted'], ['export-pdf', 'exportPDF'], ['print', 'printDocument']],
   ];
-  menu.innerHTML = actions.map(([action, label]) => `<button type="button" role="menuitem" data-document-action="${action}">${t(label)}</button>`).join('');
+  menu.innerHTML = groups.filter((group) => group.length).map((group) => group.map(([action, label, shortcut]) => `<button type="button" role="menuitem" data-document-action="${action}">${t(label)}${shortcut ? `<small>${shortcut}</small>` : ''}</button>`).join('')).join('<hr role="separator">');
   document.body.append(menu);
   const rect = title.getBoundingClientRect();
   positionMenu(menu, rect.left, rect.bottom + 6);
@@ -3201,7 +3274,10 @@ function showDocumentMenu(): void {
     if (action) { closeTabMenu(); void runAction(action); }
   });
   const dismiss = (event: Event): void => { if (!menu.contains(event.target as Node) && !title.contains(event.target as Node)) closeTabMenu(); };
-  const keydown = (event: KeyboardEvent): void => { if (event.key === 'Escape') { closeTabMenu(); title.focus(); } };
+  const keydown = (event: KeyboardEvent): void => {
+    if (moveMenuFocus(menu, event)) return;
+    if (event.key === 'Escape') { closeTabMenu(); title.focus(); }
+  };
   document.addEventListener('pointerdown', dismiss);
   document.addEventListener('keydown', keydown);
   menuDismiss = () => { menu.remove(); document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', keydown); };

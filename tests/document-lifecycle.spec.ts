@@ -49,6 +49,8 @@ test('one document keeps its close button, title menu stays in view, and Clear e
       await f.page.locator('.document-title').click();
       const menu = f.page.locator('.document-menu');
       await expect(menu).toBeVisible();
+      await expect(menu.locator('[data-document-action]')).toHaveCount(17);
+      await expect(menu.locator('[data-document-action="find"]')).toHaveCount(0);
       const bounds = await menu.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return { position: getComputedStyle(element).position, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
@@ -58,7 +60,13 @@ test('one document keeps its close button, title menu stays in view, and Clear e
       expect(bounds.top).toBeGreaterThanOrEqual(0);
       expect(bounds.right).toBeLessThanOrEqual(width);
       expect(bounds.bottom).toBeLessThanOrEqual(height);
+      const closeBounds = await menu.locator('[data-document-action="close-document"]').evaluate((element) => element.getBoundingClientRect().bottom);
+      expect(closeBounds).toBeLessThanOrEqual(height);
+      expect(closeBounds).toBeLessThan(150);
       if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: `receipts/title-menu-${width}.png` });
+      await f.page.keyboard.press('ArrowDown');
+      await expect(menu.locator('[data-document-action="close-document"]')).toBeFocused();
+      await f.page.keyboard.press('Home');
       if (width === 900) await f.page.keyboard.press('Escape');
       else await f.page.locator('.document-title').click();
       await expect(menu).toHaveCount(0);
@@ -82,12 +90,78 @@ test('one document keeps its close button, title menu stays in view, and Clear e
   } finally { await f.app.close(); }
 });
 
+test('recent files show their folders and offer a focused context menu', async () => {
+  const f = await fixture({}, false);
+  try {
+    const a = path.join(f.documents, 'Client A', 'Note.md');
+    const b = path.join(f.documents, 'Client B', 'Note.md');
+    await Promise.all([fs.mkdir(path.dirname(a)), fs.mkdir(path.dirname(b))]);
+    await Promise.all([fs.writeFile(a, '# A\n'), fs.writeFile(b, '# B\n')]);
+    await f.page.evaluate(([first, second]) => {
+      window.localStorage.setItem('markdown-magic:recent-documents', JSON.stringify([
+        { path: first, name: 'Note.md', openedAt: Date.now() },
+        { path: second, name: 'Note.md', openedAt: Date.now() - 1 },
+      ]));
+      window.localStorage.setItem('markdown-magic:pinned-navigation', JSON.stringify([first]));
+    }, [a, b]);
+    await f.page.reload();
+    await expect(f.page.locator('.welcome-recents .recent-item')).toHaveCount(2);
+    await expect(f.page.locator('.welcome-recents .recent-location').first()).toContainText('Client A');
+    await expect(f.page.locator('.welcome-recents .recent-location').last()).toContainText('Client B');
+    for (const [width, height] of [[900, 700], [1360, 900]] as const) {
+      await f.page.setViewportSize({ width, height });
+      expect(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: `receipts/recent-files-${width}.png` });
+    }
+    await f.page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', {
+      configurable: true,
+      value: async (value: string) => { Reflect.set(window, '__testCopiedPath', value); },
+    }));
+    await f.page.locator('.welcome-recents .recent-item').first().click({ button: 'right' });
+    const menu = f.page.locator('#file-menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-file-menu-action="remove"]')).toBeVisible();
+    if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: 'receipts/file-menu-1360.png' });
+    await f.page.keyboard.press('ArrowDown');
+    await expect(menu.locator('[data-file-menu-action="reveal"]')).toBeFocused();
+    await menu.locator('[data-file-menu-action="copy-path"]').click();
+    expect(await f.page.evaluate(() => Reflect.get(window, '__testCopiedPath'))).toBe(a);
+    await f.page.locator('.welcome-recents .recent-item').last().click({ button: 'right' });
+    await menu.locator('[data-file-menu-action="remove"]').click();
+    await expect(f.page.locator('.welcome-recents .recent-item')).toHaveCount(1);
+    await expect(f.page.locator('.file-list .recent-item')).toHaveCount(1);
+    expect(await fs.readFile(b, 'utf8')).toBe('# B\n');
+    await f.page.locator('[data-library-view="favorites"]').click();
+    await f.page.locator('[data-open-path]').first().click({ button: 'right' });
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-file-menu-action="copy-path"]')).toBeVisible();
+    await expect(menu.locator('[data-file-menu-action="remove"]')).toHaveCount(0);
+    await f.page.keyboard.press('Escape');
+    const favorite = f.page.locator('[data-open-path]').first();
+    await favorite.focus();
+    await favorite.press('Shift+F10');
+    await expect(menu).toBeVisible();
+    await f.page.keyboard.press('Escape');
+    await expect(favorite).toBeFocused();
+    await f.page.evaluate(() => window.localStorage.setItem('markdown-magic:theme', 'dark'));
+    await f.page.reload();
+    await f.page.setViewportSize({ width: 900, height: 700 });
+    await expect(f.page.locator('body')).toHaveAttribute('data-theme', 'dark');
+    if (process.env.MM_CAPTURE_QA) await f.page.screenshot({ path: 'receipts/recent-files-dark-900.png' });
+  } finally { await f.app.close(); }
+});
+
  test('new draft needs no folder or filename, close and restart keep its text', async () => {
   const f = await fixture({}, false);
   try {
     await menu(f.app, 'new-document');
     await expect(f.page.locator('.ProseMirror:visible')).toBeFocused();
     await expect(f.page.getByRole('dialog')).toHaveCount(0);
+    await f.page.locator('.document-title').click();
+    await expect(f.page.locator('.document-menu [data-document-action="save"]')).toContainText('Benennen');
+    await expect(f.page.locator('.document-menu [data-document-action="save-as"]')).toHaveCount(0);
+    await expect(f.page.locator('.document-menu [data-document-action="reveal"]')).toHaveCount(0);
+    await f.page.keyboard.press('Escape');
     await append(f.page, 'A draft worth keeping.');
     await menu(f.app, 'close-active-tab');
     await expect(f.page.locator('.ProseMirror:visible')).toHaveCount(0);

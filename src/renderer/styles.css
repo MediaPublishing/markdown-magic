@@ -176,9 +176,12 @@ body.is-resizing-sidebar { cursor: col-resize; user-select: none; }
 .file-index-status { font-style: italic; }
 .tree-heading { padding: 12px 10px 4px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .recent-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.recent-heading button { padding: 2px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.recent-heading button { flex: 0 0 auto; padding: 2px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; white-space: nowrap; cursor: pointer; }
 .recent-heading button:hover, .recent-heading button:focus-visible { background: var(--hover); color: var(--ink); }
-.recent-row .row-main { max-width: calc(100% - 34px); min-height: 31px; }
+.recent-row .row-main { max-width: calc(100% - 34px); height: auto; min-height: 43px; }
+.recent-text { display: grid; min-width: 0; gap: 1px; line-height: 1.25; }
+.recent-location { overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.recent-row .row-remove { top: 10px; }
 .row-remove { position: absolute; top: 4px; right: 3px; display: grid; width: 23px; height: 23px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); opacity: .34; cursor: pointer; transition: color .18s cubic-bezier(.22,.61,.36,1), background-color .18s cubic-bezier(.22,.61,.36,1), opacity .18s cubic-bezier(.22,.61,.36,1); }
 .recent-row:hover .row-remove, .row-remove:focus-visible { opacity: 1; }
 .row-remove:hover { background: var(--danger-soft); color: var(--danger-ink); }
@@ -393,6 +396,7 @@ body.is-pointer-dragging { cursor: grabbing; user-select: none; }
 .icon-action .lucide, .icon-toggle .lucide, .ghost-action .lucide, .primary-action .lucide { display: block; flex: 0 0 auto; }
 .context-menu { position: fixed; z-index: 25; min-width: 205px; padding: 6px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); box-shadow: 0 12px 35px var(--shadow-color); }
 .context-label { padding: 5px 10px 7px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.context-menu .context-label { max-width: min(320px, calc(100vw - 38px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-palette-backdrop { align-items: start; padding-top: max(96px, 12vh); }
 .command-palette { width: min(640px, 100%); overflow: hidden; padding: 0; border-radius: 10px; }
 .command-input-wrap { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 11px 12px; border-bottom: 1px solid var(--line); background: var(--white); }

@@ -8,7 +8,8 @@ Restrained neutrals, one blue action accent, native system interface typography 
 
 - Sidebar roughly 230px: New document, Recent, Drafts, Favorites, Places; settings at the bottom.
 - One document title/status bar. Title actions expose save/name, move, duplicate, reveal, history and export.
-- Compact visible formatting; rare actions disclosed. No permanent ungrouped group bar. Tabs appear for multiple open documents; groups remain optional.
+- Compact visible formatting; rare actions disclosed. No permanent ungrouped group bar. The tab and close control stay visible even for one open document; groups remain optional.
+- The title menu contains document actions in short groups. Recent entries show their containing folder and offer Finder, path copying, and list removal through a context menu.
 - Main surface is the document, with a clear writing cursor. A blank session offers New document and Open document plus recent work.
 - A single optional assistant entry. Preview clearly labelled as preview; preserve document zoom and page view.
 - Search in document uses Cmd+F, next match Cmd+G, with replace. Outline and document word count are unobtrusive.
