@@ -25,4 +25,9 @@ Evidence: a global command-palette shortcut also consumed ⇧⌘K, initially ope
 
 ## Delivery readback
 
-GitHub release, deployment and installed-app receipts are appended after the final external actions. No unverified deployment success is implied by the source checks above.
+- Source commit `6083ec1f16a0a6ade68072a0c36b317e3a567042` pushed to `main` and read back from origin.
+- [GitHub Release v0.3.0](https://github.com/MediaPublishing/markdown-magic/releases/tag/v0.3.0) published with DMG and SHA256SUMS. GitHub's DMG digest equals local SHA-256 `403bdcff0635e59679bb57640edb5d700ad8dce9b6eb10faee35455ef3782d27`; public download HTTP 200.
+- Cloudflare Production deployment `91b9cb05` completed via the existing `markdown-magic` Pages project after the user completed account authorization. Live HTML for `/` and `/en/`, and live `app.js`, are byte-identical to the local deployment files. Favicon and new review screenshot return HTTP 200.
+- Installed `/Applications/Markdown Magic.app` reports 0.3.0, passes strict signature verification and starts normally. Its `app.asar` SHA-256 equals the packaged bundle's `609532cadec924d1e08a253a2a50205039f495db997356444826ed691bde93b7`.
+- All 4 review workflows passed against the actual installed executable using temporary test profiles. The real profile was not used by tests. Final marketing capture passed, with the contextual toolbar hidden while writing in the review panel.
+- AC6 complete. Previous app and profile backup retained at `/Users/MediaPublishing/AI/backups/markdown-magic-0.3.0-2026-10-31/`.
