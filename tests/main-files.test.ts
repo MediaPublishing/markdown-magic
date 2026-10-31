@@ -258,6 +258,9 @@ describe('Preload bridge', () => {
       'readFile',
       'readTree',
       'recordAssistantCheckpoint',
+      'recordVersion',
+      'readConversations',
+      'writeConversations',
       'resolveRecentDocument',
       'restoreHistory',
       'revealApp',
@@ -275,7 +278,7 @@ describe('Preload bridge', () => {
     bridge.statFiles(['/workspace/draft.md']);
     expect(electron.invoke).toHaveBeenCalledWith('files:stat-many', ['/workspace/draft.md']);
     bridge.proposeAssistant('summary', '# Draft', 'draft.md');
-    expect(electron.invoke).toHaveBeenCalledWith('assistant:propose', 'summary', '# Draft', 'draft.md', []);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:propose', 'summary', '# Draft', 'draft.md', [], undefined);
     bridge.getAssistantStatus();
     expect(electron.invoke).toHaveBeenCalledWith('assistant:status', false);
     bridge.getAssistantStatus(true);

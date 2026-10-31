@@ -1,3 +1,4 @@
+import type { TextAnchor } from '../shared/conversations';
 import { isMarkdownDocument, shouldUseSourceEditor, splitFrontmatter } from './editor-content';
 import { createSourceEditor } from './source-editor';
 
@@ -7,6 +8,8 @@ export type EditorMode = 'visual' | 'source';
 
 export type DocumentEditor = {
   getMarkdown(): string;
+  canApplyMarkdown?(markdown: string): boolean;
+  getSelection?(): TextAnchor | undefined;
   setMarkdown(markdown: string): Promise<void> | void;
   focus?(): void;
   getHTML?(): string;
@@ -71,6 +74,12 @@ export const createDocumentEditor: DocumentEditorFactory = async (
   };
 
   return {
+    canApplyMarkdown: (markdown) => current.canApplyMarkdown?.(current.isSource ? markdown : splitFrontmatter(markdown).body) ?? true,
+    getSelection: () => {
+      const selection = current.getSelection?.();
+      if (!selection || current.isSource) return selection;
+      return { ...selection, from: selection.from + frontmatter.length, to: selection.to + frontmatter.length };
+    },
     get isSource() { return current.isSource; },
     getMarkdown: () => current.isSource ? current.getMarkdown() : `${frontmatter}${current.getMarkdown()}`,
     setMarkdown: async (markdown) => {

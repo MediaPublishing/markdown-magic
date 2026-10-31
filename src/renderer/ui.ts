@@ -1,3 +1,5 @@
+import { diffLines, compactDiff } from '../shared/text-diff';
+import { locateAnchor, moveAnchor, scopedReplacement, type Conversation, type Conversations, type TextAnchor } from '../shared/conversations';
 import {
   assignTabToGroup,
   closeTab,
@@ -219,7 +221,7 @@ function readStoredPaths(key: string): string[] {
 }
 
 type AssistantUndo = { checkpointId: string; applied: string };
-type PendingAssistantProposal = { proposal: AssistantProposal; base: string };
+type PendingAssistantProposal = { proposal: AssistantProposal; base: string; anchor?: TextAnchor; threadId?: string };
 const assistantUndoByPath = new Map<string, AssistantUndo>();
 const assistantProposalsByPath = new Map<string, PendingAssistantProposal>();
 const assistantUndoStorageKey = 'markdown-magic:assistant-undo';
@@ -328,7 +330,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
             <button class="ghost-action" data-action="save" data-testid="save-button" title="${t('save')}"><span>${iconMarkup(saveIcon)}</span><span>${t('save')}</span></button>
             <button class="ghost-action" data-action="reload" data-testid="reload-button" title="${t('reload')}"><span>${iconMarkup(refreshIcon)}</span><span>${t('reload')}</span></button>
             <button class="ghost-action" data-action="history" data-testid="history-button" title="${t('history')}"><span>${iconMarkup(historyIcon)}</span><span>${t('history')}</span></button>
-            <button class="icon-action view-menu-button" type="button" data-action="view-menu" data-testid="view-menu-button" aria-haspopup="menu" aria-expanded="false" title="${t('viewMenu')}" aria-label="${t('viewMenu')}">${iconMarkup(moreIcon)}</button>
+            <button class="icon-action passage-button" type="button" data-action="discuss-selection" title="${t('discussSelection')} (⇧⌘K)" aria-label="${t('discussSelection')}">${iconMarkup(fileTextIcon)}</button><button class="icon-action view-menu-button" type="button" data-action="view-menu" data-testid="view-menu-button" aria-haspopup="menu" aria-expanded="false" title="${t('viewMenu')}" aria-label="${t('viewMenu')}">${iconMarkup(moreIcon)}</button>
           </div>
         </header>
         <div class="editor-host"></div>
@@ -338,7 +340,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
         <header class="assistant-header">
           <span class="bot-icon">${iconMarkup(botIcon)}</span>
           <span><small>${t('assistantScope')}</small><strong>${t('assistantActiveDocument')}</strong></span>
-          <button class="icon-action" type="button" data-action="assistant-clear" title="${t('assistantClear')}" aria-label="${t('assistantClear')}">${iconMarkup(trashIcon)}</button>
+          <button class="icon-action" type="button" data-action="assistant-clear" title="${t('assistantClear')}" aria-label="${t('assistantClear')}">${iconMarkup(plusIcon)}</button>
           <button class="icon-action" type="button" data-action="toggle-assistant" aria-label="${t('closeDialog')}">${iconMarkup(closeIcon)}</button>
         </header>
         <div class="assistant-announcement sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -352,7 +354,7 @@ export async function startWorkspace(root: HTMLElement): Promise<void> {
         <form class="assistant-form">
           <label class="sr-only" for="assistant-prompt">${t('assistantPrompt')}</label>
           <textarea id="assistant-prompt" name="prompt" maxlength="2000" placeholder="${t('assistantPromptPlaceholder')}"></textarea>
-          <button class="primary-action compact-action" type="submit" data-testid="assistant-run">${t('assistantRun')}</button>
+          <div class="composer-actions"><button class="ghost-action compact-action" type="button" data-action="assistant-note">${t('saveLocalNote')}</button><button class="primary-action compact-action" type="submit" data-testid="assistant-run">${t('assistantRun')}</button></div>
         </form>
       </aside>
 
@@ -809,6 +811,7 @@ function cleanupWorkspace(): void {
   rootAbortController = undefined;
   destroyEditor();
   assistantProposalsByPath.clear();
+  conversationsByPath.clear(); conversationLoads.clear(); conversationWrites.clear(); selectedConversation.clear(); conversationErrors.clear();
   assistantBusyPath = null;
   assistantReturnFocus = null;
   fileIndexLoading = false;
@@ -994,6 +997,9 @@ function bindEvents(root: HTMLElement): void {
     const groupTarget = target.closest<HTMLElement>('[data-group-id]');
     if (groupTarget) void toggleGroup(groupTarget.dataset.groupId ?? '');
   }, listenerOptions);
+  root.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'k') { event.preventDefault(); event.stopPropagation(); void discussSelection(); }
+  }, { ...listenerOptions, capture: true });
   root.addEventListener('keydown', (event) => {
     const target = eventElement(event);
     const file = target?.closest<HTMLElement>('[data-open-recent], [data-open-path]');
@@ -1898,6 +1904,7 @@ async function loadActiveTab(): Promise<void> {
   elements.editorHost.scrollTop = session.scrollTop;
   schedulePagePreview();
   updateHeader();
+  await loadConversations(activeTab.path);
   renderAssistant();
 }
 
@@ -1917,7 +1924,9 @@ function queueRecovery(session: DocumentSession): Promise<boolean> {
 
 function handleSessionChange(session: DocumentSession, markdown: string): void {
   if (session.suppress || markdown === session.content) return;
+  for (const thread of conversationsByPath.get(session.path)?.threads ?? []) if (thread.anchor) thread.anchor = moveAnchor(session.content, markdown, thread.anchor);
   session.content = markdown;
+  if (conversationsByPath.get(session.path)?.threads.length) void saveConversations(session.path);
   session.revision += 1;
   state = setTabDirty(state, session.id, markdown !== session.savedContent);
   void queueRecovery(session);
@@ -1970,6 +1979,85 @@ function queueSave(): void {
   }
 }
 
+const conversationsByPath = new Map<string, Conversations>();
+const conversationLoads = new Map<string, Promise<void>>();
+const conversationWrites = new Map<string, Promise<boolean>>();
+const selectedConversation = new Map<string, string>();
+const conversationErrors = new Set<string>();
+function activeConversation(path: string): Conversation | undefined { return conversationsByPath.get(path)?.threads.find(t => t.id === selectedConversation.get(path)); }
+async function loadConversations(path: string): Promise<void> {
+  if (conversationsByPath.has(path)) return;
+  if (conversationLoads.has(path)) return conversationLoads.get(path);
+  const load = (async () => {
+    try {
+      const result = await window.markdownMagic.readConversations(path);
+      if (!result.ok || !result.data) throw new Error(result.error ?? t('conversationLoadFailed'));
+      conversationsByPath.set(path, result.data); conversationErrors.delete(path);
+      const content = sessions.get(state.tabs.find(t => t.path === path)?.id ?? '')?.content ?? '';
+      for (const thread of result.data.threads) if (thread.anchor && (result.data.contentHash !== contentFingerprint(content) || content.slice(thread.anchor.from, thread.anchor.to) !== thread.anchor.quote)) thread.anchor = locateAnchor(content, thread.anchor);
+      const current = result.data.threads.find(t => !t.resolved) ?? result.data.threads[0];
+      if (current) { selectedConversation.set(path, current.id); assistantMessagesByPath.set(path, current.messages); }
+    } catch (error) { conversationErrors.add(path); setStatus(errorMessage(error, t('conversationLoadFailed')), true); }
+    renderAssistant();
+  })();
+  conversationLoads.set(path, load);
+  try { await load; } finally { conversationLoads.delete(path); }
+}
+function saveConversations(path: string): Promise<boolean> {
+  const data = conversationsByPath.get(path); if (!data) return Promise.resolve(!conversationErrors.has(path));
+  data.contentHash = contentFingerprint(sessions.get(state.tabs.find(t => t.path === path)?.id ?? '')?.content ?? '');
+  const snapshot = JSON.parse(JSON.stringify(data)) as Conversations;
+  const write = (conversationWrites.get(path) ?? Promise.resolve(true)).then(async () => {
+    try {
+      const result = await window.markdownMagic.writeConversations(path, snapshot);
+      if (!result.ok) throw new Error(result.error ?? t('saveFailed'));
+      conversationErrors.delete(path); return true;
+    } catch (error) { conversationErrors.add(path); setStatus(errorMessage(error, t('saveFailed')), true); return false; }
+  });
+  conversationWrites.set(path, write); return write;
+}
+function newConversation(path: string, anchor?: TextAnchor): Conversation {
+  const thread: Conversation = { id: crypto.randomUUID(), title: anchor ? anchor.quote.replace(/\s+/g, ' ').slice(0, 80) : t('documentConversation'), createdAt: new Date().toISOString(), resolved: false, messages: [], ...(anchor ? { anchor } : {}) };
+  conversationsByPath.get(path)!.threads.unshift(thread); selectedConversation.set(path, thread.id);
+  assistantMessagesByPath.set(path, thread.messages); assistantProposalsByPath.delete(path);
+  return thread;
+}
+async function discussSelection(): Promise<void> {
+  const tab = state.tabs.find(t => t.id === state.activeTabId); const anchor = activeEditor?.getSelection?.();
+  if (!tab || !anchor) { setStatus(t('selectPassageFirst'), true); return; }
+  await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
+  newConversation(tab.path, anchor); await saveConversations(tab.path);
+  if (!assistantOpen) toggleAssistant(); else renderAssistant();
+  elements?.assistantPrompt.focus();
+}
+async function addLocalNote(): Promise<void> {
+  const tab = state.tabs.find(t => t.id === state.activeTabId); const text = elements?.assistantPrompt.value.trim();
+  if (!tab || !text) return;
+  await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
+  const thread = activeConversation(tab.path) ?? newConversation(tab.path);
+  thread.messages.push({ role: 'user', text }); assistantMessagesByPath.set(tab.path, thread.messages);
+  if (elements) elements.assistantPrompt.value = '';
+  await saveConversations(tab.path); renderAssistant();
+}
+function renderConversationControls(path: string, thread?: Conversation): string {
+  const data = conversationsByPath.get(path);
+  if (!data) return `<p class="assistant-message">${t(conversationErrors.has(path) ? 'conversationLoadFailed' : 'loading')}</p>`;
+  return `<div class="conversation-tools"><label class="sr-only" for="conversation-select">${t('conversations')}</label><select id="conversation-select"><option value="">${t('newConversation')}</option>${data.threads.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === thread?.id ? 'selected' : ''}>${item.resolved ? '✓ ' : ''}${escapeHtml(item.title)}</option>`).join('')}</select><button type="button" class="icon-action" data-review-new aria-label="${t('newConversation')}">${iconMarkup(plusIcon)}</button></div>
+    <button type="button" class="ghost-action discuss-passage" data-action="discuss-selection">${t('discussSelection')}<kbd>⇧⌘K</kbd></button>
+    ${thread ? `<div class="thread-heading"><input class="thread-title" aria-label="${t('conversationTitle')}" maxlength="160" value="${escapeHtml(thread.title)}"><button class="ghost-action compact-action" data-review-resolve>${t(thread.resolved ? 'reopenThread' : 'resolveThread')}</button></div>` : ''}
+    ${thread?.anchor ? `<section class="passage-context"><small>${t(thread.anchor.status === 'attached' ? 'selectedPassage' : 'passageChanged')}</small><blockquote>${escapeHtml(thread.anchor.quote)}</blockquote>${thread.anchor.status !== 'attached' ? `<p>${t('reselectPassage')}</p>` : ''}</section>` : ''}`;
+}
+function bindConversationControls(path: string, thread?: Conversation): void {
+  const body = elements?.assistantBody; if (!body) return;
+  body.querySelector<HTMLSelectElement>('#conversation-select')?.addEventListener('change', (event) => {
+    const id = (event.target as HTMLSelectElement).value;
+    selectedConversation.set(path, id); assistantMessagesByPath.set(path, activeConversation(path)?.messages ?? []); assistantProposalsByPath.delete(path); renderAssistant();
+  });
+  body.querySelector('[data-review-new]')?.addEventListener('click', () => { newConversation(path); void saveConversations(path); renderAssistant(); elements?.assistantPrompt.focus(); });
+  body.querySelector('[data-review-resolve]')?.addEventListener('click', () => { if (thread) { thread.resolved = !thread.resolved; void saveConversations(path); renderAssistant(); } });
+  body.querySelector<HTMLInputElement>('.thread-title')?.addEventListener('change', (event) => { if (thread) { thread.title = (event.target as HTMLInputElement).value.trim() || t('documentConversation'); void saveConversations(path); renderAssistant(); } });
+}
+
 function toggleAssistant(): void {
   if (!elements || !boundRoot) return;
   if (assistantOpen) {
@@ -1985,6 +2073,8 @@ function toggleAssistant(): void {
     if (element instanceof HTMLElement) element.setAttribute('aria-expanded', String(assistantOpen));
   });
   document.querySelector('.workspace-assistant')?.classList.toggle('active', assistantOpen);
+  const activePath = state.tabs.find(t => t.id === state.activeTabId)?.path;
+  if (activePath) void loadConversations(activePath);
   void refreshAssistantProviderStatus();
   renderAssistant();
   elements.assistantPrompt.focus();
@@ -2028,6 +2118,7 @@ function renderAssistant(): void {
   const pendingProposal = tab ? assistantProposalsByPath.get(tab.path) : undefined;
   const assistantProposal = pendingProposal?.proposal;
   const assistantProposalBase = pendingProposal?.base ?? '';
+  const thread = tab ? activeConversation(tab.path) : undefined;
   const messages = tab ? assistantMessagesByPath.get(tab.path) ?? [] : [];
   const assistantBusy = Boolean(tab && assistantBusyPath === tab.path);
   const diff = assistantProposal ? createLineDiff(assistantProposalBase, assistantProposal.markdown) : [];
@@ -2040,7 +2131,8 @@ function renderAssistant(): void {
   `).join('');
 
   elements.assistantBody.innerHTML = `
-    <p class="assistant-notice">${assistantProviderStatus.connected ? t('assistantChatGPTNotice') : t('assistantOfflineNotice')}</p>
+    ${tab ? renderConversationControls(tab.path, thread) : ''}
+    <p class="assistant-notice">${thread?.anchor && assistantProviderStatus.connected ? `${t('selectionScopeNotice')} ` : ''}${assistantProviderStatus.connected ? t('assistantChatGPTNotice') : t('assistantOfflineNotice')}</p>
     ${!tab ? `<p class="assistant-message">${t('assistantNoDocument')}</p>` : ''}
     ${tab && messages.length === 0 ? `<p class="assistant-message">${t('assistantWelcome')}</p>` : ''}
     ${messages.map((message) => `<div class="chat-message ${message.role}"><span>${message.role === 'user' ? t('assistantYou') : t('assistant')}</span><p>${escapeHtml(message.text).replace(/\n/g, '<br>')}</p></div>`).join('')}
@@ -2059,6 +2151,9 @@ function renderAssistant(): void {
       </section>
     ` : ''}
   `;
+  const heading = elements.assistantPanel.querySelector('header strong'); if (heading) heading.textContent = tab?.title ?? t('assistantActiveDocument');
+  const quickCommands = elements.assistantPanel.querySelector<HTMLElement>('.quick-commands'); if (quickCommands) quickCommands.hidden = Boolean(thread?.anchor);
+  if (tab) bindConversationControls(tab.path, thread);
   elements.assistantActions.innerHTML = undo ? `<button class="ghost-action undo-action" type="button" data-action="assistant-undo"><span>${iconMarkup(undoIcon)}</span><span>${t('assistantUndo')}</span></button>` : '';
   const latestAssistantMessage = messages.findLast((message) => message.role === 'assistant');
   elements.assistantAnnouncement.textContent = assistantBusy ? t('assistantBusy') : latestAssistantMessage?.text ?? '';
@@ -2068,7 +2163,7 @@ function renderAssistant(): void {
   elements.assistantPanel.querySelectorAll<HTMLButtonElement>('[data-assistant-command]').forEach((button) => {
     button.disabled = Boolean(assistantBusyPath) || !tab;
   });
-  requestAnimationFrame(() => { elements?.assistantBody.scrollTo({ top: elements.assistantBody.scrollHeight, behavior: 'smooth' }); });
+  requestAnimationFrame(() => { elements?.assistantBody.scrollTo({ top: elements.assistantBody.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); });
 }
 
 async function runAssistantProposal(prompt: string): Promise<void> {
@@ -2080,31 +2175,45 @@ async function runAssistantProposal(prompt: string): Promise<void> {
   const request = prompt.trim();
   if (!request || assistantBusyPath) return;
   const requestPath = tab.path;
-  const history = assistantMessagesByPath.get(tab.path) ?? [];
+  await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
+  const thread = activeConversation(tab.path) ?? newConversation(tab.path);
+  if (thread.anchor && thread.anchor.status !== 'attached') { setStatus(t('reselectPassage'), true); return; }
+  const history = [...thread.messages];
   assistantMessagesByPath.set(tab.path, [...history, { role: 'user', text: request }]);
+  thread.messages = assistantMessagesByPath.get(tab.path)!;
+  if (!thread.anchor && thread.messages.length === 1) thread.title = request.slice(0, 80);
+  assistantBusyPath = requestPath;
+  await saveConversations(tab.path);
   if (elements) elements.assistantPrompt.value = '';
   assistantProposalsByPath.delete(requestPath);
   assistantBusyPath = requestPath;
   renderAssistant();
   try {
-    const markdown = activeEditor.getMarkdown();
-    const result = await window.markdownMagic.proposeAssistant(request, markdown, tab.title, history);
+    const documentMarkdown = sessions.get(tab.id)?.editor?.getMarkdown();
+    if (documentMarkdown === undefined) throw new Error(t('assistantNoDocument'));
+    const targetAnchor = thread.anchor ? { ...thread.anchor } : undefined;
+    const markdown = targetAnchor ? documentMarkdown.slice(targetAnchor.from, targetAnchor.to) : documentMarkdown;
+    const result = await window.markdownMagic.proposeAssistant(request, markdown, targetAnchor ? `${tab.title} · ${t('selectedPassage')}` : tab.title, history, targetAnchor ? 'passage' : undefined);
     if (!result.ok || !result.reply) {
       const error = result.error ?? t('assistantProposeFailed');
-      assistantMessagesByPath.set(requestPath, [...(assistantMessagesByPath.get(requestPath) ?? []), { role: 'assistant', text: error }]);
+      thread.messages.push({ role: 'assistant', text: error });
+      if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
       if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(error, true);
       return;
     }
-    assistantMessagesByPath.set(requestPath, [...(assistantMessagesByPath.get(requestPath) ?? []), { role: 'assistant', text: result.reply }]);
-    if (result.proposal) {
-      assistantProposalsByPath.set(requestPath, { proposal: result.proposal, base: markdown });
+    thread.messages.push({ role: 'assistant', text: result.reply });
+    if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
+    if (result.proposal && selectedConversation.get(requestPath) === thread.id) {
+      assistantProposalsByPath.set(requestPath, { proposal: result.proposal, base: markdown, anchor: targetAnchor, threadId: thread.id });
       if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(result.proposal.summary);
     }
   } catch (error) {
     const message = errorMessage(error, t('assistantProposeFailed'));
-    assistantMessagesByPath.set(requestPath, [...(assistantMessagesByPath.get(requestPath) ?? []), { role: 'assistant', text: message }]);
+    thread.messages.push({ role: 'assistant', text: message });
+    if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
     if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(message, true);
   } finally {
+    await saveConversations(requestPath);
     if (assistantBusyPath === requestPath) assistantBusyPath = null;
     renderAssistant();
   }
@@ -2115,10 +2224,15 @@ async function applyAssistantProposal(): Promise<void> {
   const current = activeEditor?.getMarkdown() ?? '';
   const pendingProposal = tab ? assistantProposalsByPath.get(tab.path) : undefined;
   if (!tab || !activeEditor || activeEditorPath !== tab.path || !pendingProposal) return;
-  if (current !== pendingProposal.base) {
+  const thread = activeConversation(tab.path);
+  const target = pendingProposal.anchor && thread?.id === pendingProposal.threadId ? thread?.anchor : undefined;
+  const scoped = target ? scopedReplacement(current, target, pendingProposal.proposal.markdown) : undefined;
+  const next = scoped?.content ?? pendingProposal.proposal.markdown;
+  if (pendingProposal.anchor ? (!scoped || target?.quote !== pendingProposal.base) : current !== pendingProposal.base) {
     setStatus(t('assistantStale'), true);
     return;
   }
+  if (pendingProposal.anchor && activeEditor.canApplyMarkdown && !activeEditor.canApplyMarkdown(next)) { setStatus(t('invalidPassageMarkdown'), true); return; }
   suppressEditorChange = true;
   let checkpointId: string | undefined;
   try {
@@ -2129,10 +2243,11 @@ async function applyAssistantProposal(): Promise<void> {
     }
     checkpointId = checkpoint.entryId;
     const session = sessions.get(tab.id);
-    if (!session?.editor || session.content !== pendingProposal.base) { setStatus(t('assistantStale'), true); return; }
-    await session.editor.setMarkdown(pendingProposal.proposal.markdown);
-    handleSessionChange(session, pendingProposal.proposal.markdown);
-    assistantUndoByPath.set(tab.path, { checkpointId, applied: contentFingerprint(pendingProposal.proposal.markdown) });
+    if (!session?.editor || session.content !== current) { setStatus(t('assistantStale'), true); return; }
+    await session.editor.setMarkdown(next);
+    handleSessionChange(session, next);
+    if (scoped && thread) { thread.anchor = scoped.anchor; thread.messages.push({ role: 'assistant', text: t('passageApplied') }); await saveConversations(tab.path); }
+    assistantUndoByPath.set(tab.path, { checkpointId, applied: contentFingerprint(next) });
     persistAssistantUndo();
   } finally {
     suppressEditorChange = false;
@@ -2182,29 +2297,7 @@ async function undoAssistantChange(): Promise<void> {
   setStatus(t('assistantUndone'));
 }
 
-type DiffRow = { type: 'same' | 'added' | 'removed'; text: string };
-
-export function createLineDiff(before: string, after: string): DiffRow[] {
-  const beforeLines = before.split('\n');
-  const afterLines = after.split('\n');
-  let start = 0;
-  while (start < beforeLines.length && start < afterLines.length && beforeLines[start] === afterLines[start]) start += 1;
-  let beforeEnd = beforeLines.length;
-  let afterEnd = afterLines.length;
-  while (beforeEnd > start && afterEnd > start && beforeLines[beforeEnd - 1] === afterLines[afterEnd - 1]) {
-    beforeEnd -= 1;
-    afterEnd -= 1;
-  }
-
-  const removedCount = beforeEnd - start;
-  const addedCount = afterEnd - start;
-  const prefix = beforeLines.slice(Math.max(start - 2, 0), start).map((text): DiffRow => ({ type: 'same', text }));
-  const suffix = afterLines.slice(afterEnd, Math.min(afterEnd + 2, afterLines.length)).map((text): DiffRow => ({ type: 'same', text }));
-  const middle: DiffRow[] = beforeLines.slice(start, beforeEnd).map((text): DiffRow => ({ type: 'removed', text }));
-  middle.push(...afterLines.slice(start, afterEnd).map((text): DiffRow => ({ type: 'added', text })));
-  if (!middle.length) return [...prefix.filter((row, index) => index >= prefix.length - 4), ...suffix.slice(0, 4)];
-  return [...prefix, ...middle, ...suffix];
-}
+export function createLineDiff(before: string, after: string) { return compactDiff(diffLines(before, after)); }
 
 async function saveActiveTab(explicit: boolean): Promise<void> {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
@@ -2280,6 +2373,7 @@ async function flushAllSessions(): Promise<boolean> {
     if (!saved && !await queueRecovery(session)) ok = false;
     if (!await session.recovery) ok = false;
   }
+  for (const path of conversationsByPath.keys()) if (!await saveConversations(path)) ok = false;
   const persisted = await window.markdownMagic.saveWorkspace(state);
   return ok && persisted.ok;
 }
@@ -3208,6 +3302,7 @@ async function saveDocumentAs(operation: 'save' | 'move' | 'duplicate'): Promise
   session.relocating = true;
   let result;
   try {
+    if (!await saveConversations(oldPath)) return;
     result = await window.markdownMagic.saveDocumentAs({ tabId: tab.id, sourcePath: oldPath, content,
       suggestedName: tab.draft ? `${suggestedDocumentName(content)}.md` : tab.title, operation });
   } catch (error) { setStatus(errorMessage(error, t('saveFailed')), true); return; }
@@ -3225,6 +3320,9 @@ async function saveDocumentAs(operation: 'save' | 'move' | 'duplicate'): Promise
     try { await session.editor?.setMarkdown(result.content); session.content = result.content; }
     finally { session.suppress = false; }
   }
+  await conversationWrites.get(oldPath);
+  if (conversationsByPath.has(oldPath)) { conversationsByPath.set(path, conversationsByPath.get(oldPath)!); conversationsByPath.delete(oldPath); }
+  if (selectedConversation.has(oldPath)) { selectedConversation.set(path, selectedConversation.get(oldPath)!); selectedConversation.delete(oldPath); }
   session.editor?.setDocumentPath?.(path);
   state = { ...state, tabs: state.tabs.map((item) => item.id === tab.id ? { ...item, path, title: folderName(path), draft: false, missing: false, dirty: session.revision !== revision } : item) };
   if (activeEditor === session.editor) { activeEditorPath = path; activeEditorMtimeMs = session.mtime; }
@@ -3409,6 +3507,8 @@ async function performAction(action: string): Promise<void> {
   if (action === 'group-selected') await groupSelectedFiles();
   if (action === 'save') await saveActiveTab(true);
   if (action === 'reload') await reloadActiveDocument();
+  if (action === 'discuss-selection') await discussSelection();
+  if (action === 'assistant-note') await addLocalNote();
   if (action === 'history') await showHistory();
   if (action === 'conflict-center') await showConflictCenter();
   if (action === 'toggle-assistant') toggleAssistant();
@@ -3427,8 +3527,8 @@ async function performAction(action: string): Promise<void> {
   }
   if (action === 'assistant-clear') {
     if (activeTab) {
-      assistantMessagesByPath.delete(activeTab.path);
-      assistantProposalsByPath.delete(activeTab.path);
+      await loadConversations(activeTab.path);
+      if (conversationsByPath.has(activeTab.path)) { newConversation(activeTab.path); await saveConversations(activeTab.path); }
     }
     renderAssistant();
   }
@@ -3549,14 +3649,21 @@ async function showHistory(): Promise<void> {
   const backdrop = document.createElement('div'); backdrop.className = 'dialog-backdrop';
   const dialog = document.createElement('div'); dialog.id = 'history-dialog'; dialog.className = 'dialog history-dialog';
   dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-labelledby', 'history-title');
-  dialog.innerHTML = `<div class="dialog-header"><h2 id="history-title">${t('historyTitle')}</h2><button class="icon-action" data-cancel aria-label="${t('close')}">${iconMarkup(closeIcon)}</button></div><p>${t('historyDescription')} ${t('historyCurrent')}</p><div class="history-list">${t('loading')}</div><pre class="history-preview" hidden></pre><div class="dialog-actions history-preview-actions" hidden><button class="ghost-action" data-history-copy>${t('openAsCopy')}</button><button class="primary-action" data-history-restore>${t('restoreVersion')}</button></div>`;
+  dialog.innerHTML = `<div class="dialog-header"><h2 id="history-title">${t('historyTitle')}</h2><button class="icon-action" data-cancel aria-label="${t('close')}">${iconMarkup(closeIcon)}</button></div><p>${t('historyDescription')}</p><form class="version-form"><label class="sr-only" for="version-name">${t('versionName')}</label><input id="version-name" maxlength="160" required placeholder="${t('versionName')}"><button class="primary-action compact-action" type="submit">${t('captureVersion')}</button></form><div class="history-list">${t('loading')}</div><section class="history-comparison" hidden><h3>${t('comparedToCurrent')}</h3><div class="version-diff diff-view"></div><details><summary>${t('showSource')}</summary><pre class="history-preview"></pre></details></section><div class="dialog-actions history-preview-actions" hidden><button class="ghost-action" data-history-copy>${t('openAsCopy')}</button><button class="primary-action" data-history-restore>${t('restoreVersion')}</button></div>`;
   const close = mountDialog(backdrop, dialog);
   dialog.querySelector('[data-cancel]')?.addEventListener('click', close);
+  dialog.querySelector('.version-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault(); const input = dialog.querySelector<HTMLInputElement>('#version-name')!;
+    const button = dialog.querySelector<HTMLButtonElement>('.version-form button')!; button.disabled = true;
+    const result = await window.markdownMagic.recordVersion(tab.path, sessions.get(tab.id)?.editor?.getMarkdown() ?? '', input.value.trim());
+    if (!result.ok) { button.disabled = false; setStatus(result.error ?? t('saveFailed'), true); return; }
+    close(); await showHistory();
+  });
   const result = await window.markdownMagic.listHistory(tab.path);
   const list = dialog.querySelector<HTMLElement>('.history-list')!;
   if (!result.entries?.length) { list.textContent = result.error ?? t('noHistory'); return; }
   const formatter = new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
-  list.innerHTML = result.entries.map((entry) => `<div class="history-item"><strong>${formatter.format(new Date(entry.timestamp))}</strong><button class="ghost-action" data-history-preview="${escapeHtml(entry.id)}">${t('previewVersion')}</button></div>`).join('');
+  list.innerHTML = result.entries.map((entry) => `<div class="history-item"><span><strong>${escapeHtml(entry.label || t(entry.reason === 'assistant-before' ? 'beforeAssistant' : entry.reason === 'before-restore' ? 'beforeRestore' : 'automaticVersion'))}</strong><small>${formatter.format(new Date(entry.timestamp))}</small></span><button class="ghost-action" data-history-preview="${escapeHtml(entry.id)}">${t('previewVersion')}</button></div>`).join('');
   let selectedContent: string | undefined;
   list.addEventListener('click', async (event) => {
     const id = eventElement(event)?.closest<HTMLElement>('[data-history-preview]')?.dataset.historyPreview;
@@ -3565,7 +3672,10 @@ async function showHistory(): Promise<void> {
     if (!read.ok || read.content === undefined) { setStatus(read.error ?? t('fileLoadFailed'), true); return; }
     selectedContent = read.content;
     const preview = dialog.querySelector<HTMLElement>('.history-preview')!;
-    preview.textContent = selectedContent; preview.hidden = false;
+    preview.textContent = selectedContent;
+    dialog.querySelector<HTMLElement>('.history-comparison')!.hidden = false;
+    const rows = createLineDiff(selectedContent, sessions.get(tab.id)?.editor?.getMarkdown() ?? '');
+    dialog.querySelector<HTMLElement>('.version-diff')!.innerHTML = rows.length ? rows.map(row => `<div class="diff-line ${row.type}"><span>${row.type === 'added' ? '+' : row.type === 'removed' ? '−' : ''}</span><code>${escapeHtml(row.text)}</code></div>`).join('') : `<p>${t('assistantNoChanges')}</p>`;
     dialog.querySelector<HTMLElement>('.history-preview-actions')!.hidden = false;
   });
   dialog.querySelector('[data-history-copy]')?.addEventListener('click', () => { if (selectedContent !== undefined) { close(); void newDocument(selectedContent); } });

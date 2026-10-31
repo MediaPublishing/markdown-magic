@@ -401,8 +401,9 @@ function registerIpc(): void {
 
   handleTrusted('assistant:status', async (_event, forceRefresh = false) => getCodexAssistantStatus({ forceStatusRefresh: forceRefresh === true }));
 
-  handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, documentTitle: string, history: AssistantChatMessage[] = []): Promise<OperationResult & { reply?: string; proposal?: AssistantProposal }> => {
+  handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, documentTitle: string, history: AssistantChatMessage[] = [], scope?: 'passage'): Promise<OperationResult & { reply?: string; proposal?: AssistantProposal }> => {
     try {
+      if (scope !== undefined && scope !== 'passage') throw new Error('Ungültiger Assistentenbereich.');
       if (typeof prompt !== 'string' || prompt.length > 2000) throw new Error('Ungültiger Assistentenauftrag.');
       if (typeof markdown !== 'string' || markdown.length > MAX_ASSISTANT_DOCUMENT_LENGTH) throw new Error('Das Dokument ist für den Assistenten zu gross.');
       if (typeof documentTitle !== 'string') throw new Error('Ungültiger Dokumenttitel.');
@@ -434,7 +435,7 @@ function registerIpc(): void {
       let chatGptFailed = false;
       if (provider.connected) {
         try {
-          const draft = await createCodexAssistantDraft(prompt, markdown, documentTitle, safeHistory);
+          const draft = await createCodexAssistantDraft(prompt, markdown, documentTitle, safeHistory, { scope });
           const proposal = draft.action === 'propose_edit' && draft.summary && draft.markdown !== null ? {
             id: createAssistantProposalId(),
             mode: 'custom' as const,

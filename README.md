@@ -4,7 +4,7 @@
 
 Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev/) · [Download 0.2.5 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.5/Markdown-Magic-0.2.5-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.2.5.md)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.3.0 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.3.0.md)
 
 ![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
@@ -17,6 +17,12 @@ Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Ne
 Bestehende Dateien öffnest du mit **⌘O**, über den Finder oder über deine Orte in der Seitenleiste. Änderungen werden automatisch gesichert. Ordnerwechsel lässt geöffnete Dokumente stehen.
 
 Wenn eine Datei außerhalb der App geändert wurde und du sie mit eigenen ungespeicherten Änderungen schließt, kannst du diese Änderungen ausdrücklich verwerfen. Die neuere Datei auf dem Mac bleibt erhalten.
+
+## Fassungen und Notizen
+
+Über den Dokumenttitel öffnest du **Fassungen**. Benenne einen Arbeitsstand, etwa „Vor der Kürzung“, und vergleiche später die Änderungen.
+
+Markiere eine Passage und drücke **⇧⌘K**. **Nur notieren** speichert einen lokalen Kommentar. **Senden** bespricht die Stelle mit dem vorhandenen Assistenten; **Übernehmen** wendet einen geprüften Vorschlag an. Gespräche bleiben nach einem Neustart erhalten. Erledigte Kommentare lassen sich wieder öffnen. Notizen liegen im lokalen App-Datenordner; Dokumentkopien übernehmen sie nicht automatisch.
 
 ## Im Alltag
 
@@ -37,7 +43,7 @@ Wenn eine Datei außerhalb der App geändert wurde und du sie mit eigenen ungesp
 
 ## Installation und Updates
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.5/Markdown-Magic-0.2.5-arm64.dmg).
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg).
 2. `Markdown Magic.app` nach `Programme` ziehen.
 3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
 
@@ -64,7 +70,7 @@ Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test
 
 A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Download 0.2.5 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.5/Markdown-Magic-0.2.5-arm64.dmg) · [Release notes](docs/RELEASE-0.2.5.md)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.3.0 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Release notes](docs/RELEASE-0.3.0.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
@@ -77,6 +83,12 @@ A visual Markdown editor for Mac: open, write, find it again. New documents are 
 Open existing files with **⌘O**, Finder or Places. Changes save automatically. Switching folders keeps your open documents intact.
 
 If a file changed outside the app and you close it with unsaved edits, you can explicitly discard those edits. The newer file on your Mac remains untouched.
+
+## Versions and notes
+
+Open **Versions** from the document title. Name a milestone such as “Before shortening” and compare later changes.
+
+Select a passage and press **⇧⌘K**. **Keep as note** stores a local comment. **Send** discusses that passage with the existing assistant; **Apply** accepts a checked proposal. Conversations survive restarts, and resolved comments can be reopened. Notes stay in local app data; document copies do not inherit them automatically.
 
 ## Everyday tools
 
@@ -95,7 +107,7 @@ If a file changed outside the app and you close it with unsaved edits, you can e
 
 ## Install and update
 
-[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.2.5/Markdown-Magic-0.2.5-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
 
 **Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
 

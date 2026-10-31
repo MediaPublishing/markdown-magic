@@ -1,5 +1,6 @@
+import { anchorAt, locateAnchor } from '../shared/conversations';
 import { Crepe } from '@milkdown/crepe';
-import { editorViewCtx, prosePluginsCtx, serializerCtx } from '@milkdown/kit/core';
+import { editorViewCtx, prosePluginsCtx, serializerCtx, parserCtx } from '@milkdown/kit/core';
 import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
 import { getHTML, insert, outline, replaceAll } from '@milkdown/kit/utils';
 import '@milkdown/crepe/theme/common/style.css';
@@ -81,6 +82,32 @@ export const createVisualMilkdownEditor: DocumentEditorFactory = async (root, in
   });
 
   return {
+    canApplyMarkdown: (markdown) => crepe.editor.action((ctx) => {
+      const next = ctx.get(parserCtx)(markdown); if (!next) return false;
+      // Unbalanced formatting becomes literal text in the existing Markdown parser.
+      const literals = (text: string) => text.match(/\*\*|__|~~|`|!?\[|\]\(/g)?.length ?? 0;
+      return literals(next.textContent) <= literals(ctx.get(editorViewCtx).state.doc.textContent);
+    }),
+    getSelection: () => crepe.editor.action((ctx) => {
+      const { state } = ctx.get(editorViewCtx);
+      if (state.selection.empty) return undefined;
+      const start = 'MMSTART' + crypto.randomUUID().replaceAll('-', '');
+      const end = 'MMEND' + crypto.randomUUID().replaceAll('-', '');
+      const startMarks = state.doc.resolve(Math.min(state.selection.from + 1, state.selection.to)).marks();
+      const endMarks = state.doc.resolve(Math.max(state.selection.from, state.selection.to - 1)).marks();
+      const marked = state.tr.insert(state.selection.to, state.schema.text(end, endMarks)).insert(state.selection.from, state.schema.text(start, startMarks)).doc;
+      const serialize = ctx.get(serializerCtx);
+      const value = serialize(marked);
+      const from = value.indexOf(start); const to = value.indexOf(end) - start.length;
+      if (from < 0 || to <= from) return undefined;
+      const canonical = value.replace(start, '').replace(end, '');
+      if (canonical !== serialize(state.doc)) return undefined;
+      const anchor = anchorAt(canonical, from, to);
+      const current = visualChanged ? crepe.getMarkdown() : source;
+      if (current === canonical) return anchor;
+      const located = locateAnchor(current, anchor);
+      return located.status === 'attached' ? located : undefined;
+    }),
     isSource: false,
     getMarkdown: () => visualChanged ? crepe.getMarkdown() : source,
     setMarkdown: async (markdown) => {

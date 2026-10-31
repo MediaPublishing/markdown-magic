@@ -1,3 +1,4 @@
+import type { Conversations } from './conversations';
 import type { AssistantChatMessage, AssistantChatResponse } from './assistant';
 import type { AssistantProviderStatus } from '../main/codex-assistant';
 
@@ -83,7 +84,8 @@ export type HistoryEntry = {
   timestamp: string;
   mtimeMs: number;
   size: number;
-  reason: 'save' | 'before-restore' | 'assistant-before';
+  reason: 'save' | 'before-restore' | 'assistant-before' | 'manual';
+  label?: string;
 };
 
 export type RecoverySnapshot = { documentId: string; path: string; content: string; baseMtimeMs: number | null; revision: number; updatedAt: number };
@@ -122,7 +124,10 @@ export type MarkdownMagicBridge = {
   chooseDocument(): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }>;
   revealApp(): Promise<OperationResult>;
   getAssistantStatus(forceRefresh?: boolean): Promise<AssistantProviderStatus>;
-  proposeAssistant(prompt: string, markdown: string, documentTitle: string, history?: AssistantChatMessage[]): Promise<OperationResult & Partial<AssistantChatResponse>>;
+  proposeAssistant(prompt: string, markdown: string, documentTitle: string, history?: AssistantChatMessage[], scope?: 'passage'): Promise<OperationResult & Partial<AssistantChatResponse>>;
+  readConversations(path: string): Promise<OperationResult & { data?: Conversations }>;
+  writeConversations(path: string, data: Conversations): Promise<OperationResult>;
+  recordVersion(path: string, content: string, label: string): Promise<OperationResult>;
   listHistory(path: string): Promise<OperationResult & { entries?: HistoryEntry[] }>;
   recordAssistantCheckpoint(path: string, content: string, mtimeMs: number): Promise<OperationResult & { entryId?: string }>;
   restoreHistory(path: string, entryId: string): Promise<OperationResult & { content?: string; mtimeMs?: number }>;

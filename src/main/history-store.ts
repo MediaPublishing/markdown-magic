@@ -4,7 +4,7 @@ import path from 'node:path';
 import { writeFileAtomically } from './files';
 import { SerialQueue } from './serial-queue';
 
-export type HistoryReason = 'save' | 'before-restore' | 'assistant-before';
+export type HistoryReason = 'save' | 'before-restore' | 'assistant-before' | 'manual';
 
 export type HistoryEntry = {
   id: string;
@@ -12,6 +12,7 @@ export type HistoryEntry = {
   mtimeMs: number;
   size: number;
   reason: HistoryReason;
+  label?: string;
 };
 
 type HistoryIndex = {
@@ -29,7 +30,8 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
     && typeof entry.timestamp === 'string'
     && typeof entry.mtimeMs === 'number'
     && typeof entry.size === 'number'
-    && (entry.reason === 'save' || entry.reason === 'before-restore' || entry.reason === 'assistant-before');
+    && (entry.reason === 'save' || entry.reason === 'before-restore' || entry.reason === 'assistant-before' || entry.reason === 'manual')
+    && (entry.label === undefined || (typeof entry.label === 'string' && entry.label.length <= 160 && entry.label.trim().length > 0));
 }
 
 function normalizeIndex(value: unknown, filePath: string): HistoryIndex {
@@ -45,7 +47,9 @@ export class HistoryStore {
   private queue = new SerialQueue();
   constructor(private readonly basePath: string) {}
 
-  async record(filePath: string, content: string, mtimeMs: number, reason: HistoryReason): Promise<HistoryEntry> {
+  async record(filePath: string, content: string, mtimeMs: number, reason: HistoryReason, label?: string): Promise<HistoryEntry> {
+    if (reason === 'manual' && (!label?.trim() || label.trim().length > 160)) throw new Error('Eine benannte Fassung braucht einen Namen mit höchstens 160 Zeichen.');
+    if (label !== undefined && (!label.trim() || label.trim().length > 160)) throw new Error('Der Fassungsname darf nicht leer sein und höchstens 160 Zeichen enthalten.');
     return this.queue.run(filePath, async () => {
     const entry: HistoryEntry = {
       id: crypto.randomUUID(),
@@ -53,13 +57,17 @@ export class HistoryStore {
       mtimeMs,
       size: Buffer.byteLength(content, 'utf8'),
       reason,
+      ...(label?.trim() ? { label: label.trim() } : {}),
     };
     const { directory, index } = await this.loadIndex(filePath);
     await fs.mkdir(path.join(directory, 'snapshots'), { recursive: true });
     await writeFileAtomically(this.snapshotPath(directory, entry.id), content);
     const nextEntries = [entry, ...index.entries];
-    const removedEntries = nextEntries.slice(MAX_HISTORY_ENTRIES);
-    index.entries = nextEntries.slice(0, MAX_HISTORY_ENTRIES);
+    const manual = nextEntries.filter((item) => item.reason === 'manual');
+    const automatic = nextEntries.filter((item) => item.reason !== 'manual');
+    const retained = new Set([...manual, ...automatic.slice(0, MAX_HISTORY_ENTRIES)].map((item) => item.id));
+    const removedEntries = nextEntries.filter((item) => !retained.has(item.id));
+    index.entries = nextEntries.filter((item) => retained.has(item.id));
     await writeFileAtomically(path.join(directory, 'index.json'), `${JSON.stringify(index, null, 2)}\n`);
     for (const removed of removedEntries) {
       const archive = path.join(directory, 'archive');
@@ -67,6 +75,36 @@ export class HistoryStore {
       await fs.rename(this.snapshotPath(directory, removed.id), path.join(archive, `${removed.id}.md`));
     }
     return entry;
+    });
+  }
+
+  async relocate(sourcePath: string, destinationPath: string): Promise<void> {
+    const source = path.resolve(sourcePath);
+    const destination = path.resolve(destinationPath);
+    if (source === destination) return;
+    await this.queue.run(destination, async () => {
+      const sourceLoaded = await this.loadIndex(source);
+      if (!sourceLoaded.index.entries.length) return;
+      const destinationLoaded = await this.loadIndex(destination);
+      const existing = new Map(destinationLoaded.index.entries.map((entry) => [entry.id, entry]));
+      const destinationDirectory = destinationLoaded.directory;
+      await fs.mkdir(path.join(destinationDirectory, 'snapshots'), { recursive: true });
+      for (const entry of sourceLoaded.index.entries) {
+        if (existing.has(entry.id)) continue;
+        await fs.copyFile(this.snapshotPath(sourceLoaded.directory, entry.id), this.snapshotPath(destinationDirectory, entry.id));
+        existing.set(entry.id, entry);
+      }
+      const merged = [...existing.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      const manual = merged.filter((item) => item.reason === 'manual');
+      const automatic = merged.filter((item) => item.reason !== 'manual');
+      const retained = new Set([...manual, ...automatic.slice(0, MAX_HISTORY_ENTRIES)].map((item) => item.id));
+      const removed = merged.filter((item) => !retained.has(item.id));
+      await writeFileAtomically(path.join(destinationDirectory, 'index.json'), `${JSON.stringify({ version: 1, path: destination, entries: merged.filter((item) => retained.has(item.id)) }, null, 2)}\n`);
+      for (const entry of removed) {
+        const archive = path.join(destinationDirectory, 'archive');
+        await fs.mkdir(archive, { recursive: true });
+        await fs.rename(this.snapshotPath(destinationDirectory, entry.id), path.join(archive, `${entry.id}.md`));
+      }
     });
   }
 

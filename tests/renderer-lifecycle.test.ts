@@ -30,6 +30,8 @@ it('retains a conflicted document and its editor across switches, keeps newer re
     return { ok: true, mtimeMs: old.mtimeMs + 1 };
   });
   window.markdownMagic = {
+    readConversations: async () => ({ ok: true, data: { version: 1, threads: [] } }),
+    writeConversations: async () => ({ ok: true }),
     loadWorkspace: async () => ({ state: workspace, files: [], onboardingRequired: true }),
     saveWorkspace: async (value) => { workspace = structuredClone(value); return { ok: true }; },
     createDraft: async () => { const id = `draft-${++seq}`; const tab = { id, path: `/drafts/${id}.md`, title: 'Untitled', groupId: null, dirty: false, missing: false, draft: true }; disk.set(tab.path, { content: '', mtimeMs: 1 }); return { ok: true, tab }; },

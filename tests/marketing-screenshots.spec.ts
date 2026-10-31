@@ -35,6 +35,25 @@ test('captures current public product and compact-window screenshots using only 
     await expect(page.locator('.document-menu')).toHaveCount(0);
     await page.locator('[data-library-view="drafts"]').click();
     await page.screenshot({ path: 'docs/screenshots/workspace-light.png' });
+    await page.locator('.ProseMirror:visible p').first().evaluate((element) => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const selection = window.getSelection()!; (element.closest('.ProseMirror') as HTMLElement).focus();
+      selection.removeAllRanges(); selection.addRange(range); document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.waitForTimeout(100);
+    await page.keyboard.press('Meta+Shift+K');
+    await expect(page.locator('.passage-context')).toBeVisible();
+    await page.locator('#assistant-prompt').fill('A concrete example would help the reader here.');
+    await page.locator('[data-action="assistant-note"]').click();
+    await expect(page.locator('.chat-message.user')).toContainText('concrete example');
+    await page.locator('#assistant-prompt').focus();
+    await page.screenshot({ path: 'docs/screenshots/review-light.png' });
+    await page.locator('.assistant-header [data-action="toggle-assistant"]').click();
+    await page.locator('.document-title').click(); await page.locator('[data-document-action="history"]').click();
+    await page.locator('#version-name').fill('First thoughts'); await page.locator('.version-form button').click();
+    await expect(page.locator('.history-item')).toContainText('First thoughts');
+    await page.screenshot({ path: 'docs/screenshots/versions-light.png' });
+    await page.locator('#history-dialog [data-cancel]').click();
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(900, 700));
     await page.screenshot({ path: 'receipts/0.2/editor-900.png' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

@@ -1,3 +1,4 @@
+import { ConversationStore } from './conversation-store';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -30,6 +31,7 @@ export function registerDocumentIpc(s: Services): { recovery: RecoveryStore; dra
       droppedImages.add(requested);
     }
   });
+  const conversations = new ConversationStore(path.join(s.userData, 'conversations'));
   const drafts = new DraftStore(path.join(s.userData, 'drafts'));
   const recovery = new RecoveryStore(path.join(s.userData, 'recovery'));
   const handle = (channel: string, fn: (...args: any[]) => Promise<object>) => ipcMain.handle(channel, async (event, ...args) => {
@@ -50,6 +52,12 @@ export function registerDocumentIpc(s: Services): { recovery: RecoveryStore; dra
   handle('recovery:write', async (snapshot: RecoverySnapshot) => { validateRecovery(snapshot); await s.requireDocument(snapshot.path); await recovery.write(snapshot); return {}; });
   handle('recovery:read', async (id: string) => { validateDocumentId(id); return recovery.state(id); });
   handle('recovery:clear', async (id: string, revision: number) => { await recovery.clear(id, revision); return {}; });
+  handle('conversations:read', async (requested: string) => ({ data: await conversations.read(await s.requireDocument(requested)) }));
+  handle('conversations:write', async (requested: string, data: unknown) => { await conversations.write(await s.requireDocument(requested), data); return {}; });
+  handle('history:record-version', async (requested: string, content: string, label: string) => {
+    if (typeof content !== 'string' || content.length > 50_000_000 || typeof label !== 'string' || !label.trim() || label.length > 160) throw new Error('Ungültige Fassung.');
+    await s.history().record(await s.requireDocument(requested), content, Date.now(), 'manual', label); return {};
+  });
   handle('history:read', async (requested: string, id: string) => ({ content: await s.history().read(await s.requireDocument(requested), id) }));
   handle('documents:window', async (requested: string | null, dirty: boolean) => {
     if (typeof dirty !== 'boolean') throw new Error('Ungültiger Dokumentstatus.');
@@ -79,6 +87,7 @@ export function registerDocumentIpc(s: Services): { recovery: RecoveryStore; dra
         const stats = await fs.stat(destination);
         s.rememberSaved(destination, content, Math.round(stats.mtimeMs));
         if (request.operation !== 'duplicate') {
+          if (source !== destination) { await s.history().relocate(source, destination); await conversations.relocate(source, destination); }
           await s.store().update((state) => ({ ...state, tabs: state.tabs.map((tab) => tab.id === request.tabId ? { ...tab, path: destination, title: path.basename(destination), draft: false, dirty: false, missing: false } : tab) }));
           if (source !== destination) {
             // The original remains recoverable. Native Trash failure leaves a harmless second copy.

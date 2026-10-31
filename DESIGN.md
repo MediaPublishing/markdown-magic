@@ -19,3 +19,7 @@ Restrained neutrals, one blue action accent, native system interface typography 
 Cover empty, typing, saving, saved draft, saved file, missing file, failed save, conflict, recovery, native save cancellation, and restored session. Persist important errors until resolved. Preserve focus and keyboard access; label actual editable surfaces, dialog actions and icon controls. Respect reduced motion.
 
 App evidence: 1360×900 and 900×700, light/dark, empty, draft and populated document. Website evidence: desktop and narrow phone, both languages, actual screenshots and working download link. The public website is a quieter explanation of the same writing-first product, not a second design system.
+
+## Review tools, 0.3
+
+Named milestones and automatic backups share the Versions view, with an inline capture form and separate edit blocks. At wide window sizes the review panel docks beside the writing surface; in compact windows it floats with an explicit close control. The panel holds a conversation picker, editable title, passage quotation, local notes and optional assistant proposals. Note and Send are separate actions. All conversation data stays in app data; no sidecars in shared folders.

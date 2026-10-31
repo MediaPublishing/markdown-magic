@@ -41,6 +41,7 @@ export type CodexAssistantOptions = {
   cwd?: string;
   timeoutMs?: number;
   model?: string;
+  scope?: 'passage';
   spawnImpl?: ProcessFactory;
   forceStatusRefresh?: boolean;
 };
@@ -121,10 +122,10 @@ export async function createCodexAssistantDraft(
         type: 'text',
         text_elements: [],
         text: [
-          'Führe das Gespräch über dieses Dokument fort.',
+          options.scope === 'passage' ? 'Du arbeitest ausschließlich am markierten Markdown-Ausschnitt. Bei einer Änderung enthält markdown nur den Ersatz für diesen Ausschnitt. Keine neue Überschrift, keine umgebenden Textteile, keine Code-Umrahmung, keine zusätzlichen Zeilenumbrüche an den Rändern. Erhalte die Markdown-Auszeichnungen. Ohne Änderungsauftrag nur antworten.' : 'Führe das Gespräch über dieses Dokument fort.',
           'Gib exakt ein JSON-Objekt mit action, reply, summary und markdown zurück.',
           'Bei einer Frage, Analyse oder Zusammenfassung ohne ausdrücklichen Änderungswunsch: action="answer", summary=null, markdown=null.',
-          'Bei einem ausdrücklichen Änderungswunsch: action="propose_edit", eine kurze summary und das vollständige neue Dokument in markdown.',
+          options.scope === 'passage' ? 'Bei einem ausdrücklichen Änderungswunsch: action="propose_edit", eine kurze summary und nur der neue Ausschnitt in markdown.' : 'Bei einem ausdrücklichen Änderungswunsch: action="propose_edit", eine kurze summary und das vollständige neue Dokument in markdown.',
           'Keine Erklärungen ausserhalb des JSON. Keine Tools verwenden.',
           `Dokumenttitel: ${documentTitle}`,
           `Bisheriges Gespräch: ${JSON.stringify(history.slice(-12))}`,
@@ -148,7 +149,7 @@ async function withCodexAppServer<T>(options: CodexAssistantOptions, run: (sessi
   const spawnImpl = options.spawnImpl ?? spawn;
   const child = spawnImpl(resolveCodexBinary(options.binary), [
     '-c', 'openai_base_url="https://chatgpt.com/backend-api/codex"',
-    '-c', `model="${options.model ?? 'gpt-5.6-terra'}"`,
+    ...(options.model ? ['-c', `model="${options.model}"`] : []),
     'app-server',
   ], {
     cwd: options.cwd ?? os.tmpdir(),

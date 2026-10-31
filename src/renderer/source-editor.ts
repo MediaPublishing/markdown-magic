@@ -1,3 +1,4 @@
+import { anchorAt } from '../shared/conversations';
 import type { DocumentEditor, DocumentEditorFactory, FindResult } from './document-editor';
 import { findTextMatches, getSourceHeadings } from './editor-content';
 
@@ -136,6 +137,11 @@ export const createSourceEditor: DocumentEditorFactory = async (root, initialMar
   };
 
   return {
+    getSelection: () => {
+      const from = withLineEnding(textarea.value.slice(0, textarea.selectionStart), lineEnding).length;
+      const to = withLineEnding(textarea.value.slice(0, textarea.selectionEnd), lineEnding).length;
+      return from < to ? anchorAt(currentSource, from, to) : undefined;
+    },
     isSource: true,
     getMarkdown: () => currentSource,
     setMarkdown: (markdown) => update(markdown, markdown.length, markdown.length, true),
