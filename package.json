@@ -18,7 +18,8 @@
     "test:e2e": "npm run build:renderer && npm run build:electron && playwright test",
     "quality": "npm run typecheck && npm run test && npm run test:e2e",
     "screenshots:marketing": "npm run build:renderer && npm run build:electron && playwright test tests/marketing-screenshots.spec.ts",
-    "deploy:pages": "wrangler pages deploy site --project-name markdown-magic --branch main",
+    "build:site": "node scripts/build-site.mjs",
+    "deploy:pages": "npm run build:site && wrangler pages deploy site --project-name markdown-magic --branch main",
     "package:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg",
     "package:mac:app": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir"
   },

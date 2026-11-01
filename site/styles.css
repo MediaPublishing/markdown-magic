@@ -81,7 +81,6 @@ footer > a:last-child { text-underline-offset:4px; }
 a:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; border-radius:2px; }
 .skip-link { position:fixed; left:16px; top:-70px; z-index:30; padding:10px 16px; background:var(--ink); color:var(--paper); }
 .skip-link:focus { top:12px; }
-.no-script { padding:18px; font-size:12px; color:var(--muted); text-align:center; }
 @media(max-width:1000px) {
   .site-header { gap:24px; }
   .site-header nav { gap:18px; }

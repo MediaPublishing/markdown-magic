@@ -157,6 +157,7 @@ function setLanguage(language) {
   const selected = language === 'en' ? 'en' : 'de';
   const text = copy[selected];
   document.documentElement.lang = selected;
+  document.querySelector('.language-switch').setAttribute('aria-label', selected === 'en' ? 'Language' : 'Sprache');
   document.querySelectorAll('[data-copy]').forEach(element => {
     const value = text[element.dataset.copy];
     if (value === undefined) return;

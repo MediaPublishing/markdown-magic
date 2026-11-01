@@ -14,11 +14,11 @@ Deutsch und Englisch wurden vollständig überarbeitet. Navigation, klare Downlo
 - `ce-noslop`: konkrete Produktfunktionen statt einer Speicherfunktion als Hauptversprechen; keine erfundenen Qualitäts-, Sicherheits- oder Kundenbelege.
 - `ce-simplify-code`: Reuse-, Quality- und Efficiency-Pässe abgeschlossen; keine lohnenden zusätzlichen Abstraktionen. Ein ungenutzter Headline-Wrapper samt Stilregel wurde entfernt.
 - `ce-code-review`: abgeschlossener Review-Receipt unter `/tmp/compound-engineering-501/ce-code-review/20261031-000001-abc1/review.json`. Ein P2 zur dekorativen Pfeilbeschriftung wurde behoben und im Browser nachgeprüft. Keine weiteren belegten blockierenden Befunde.
-- JavaScript-Syntaxprüfung, Typecheck und 82 Unit-Tests bestanden. Keine neuen Unit-Tests für reine Inhalte und Darstellung; stattdessen direkte Browserprüfung der sichtbaren Seite.
+- JavaScript-Syntaxprüfung, Typecheck und 84 Unit-Tests bestanden. Zwei neue Regressionstests sichern Sprache, Headline, Canonical- und Open-Graph-Metadaten der statischen DE/EN-Seiten ohne JavaScript. Der englische Test schlug vor der Umsetzung mit fehlender HTML-Datei fehl. Für Inhalte und Darstellung erfolgte zusätzlich die direkte Browserprüfung.
 - DE/EN bei 390, 900 und 1440 Pixeln: richtige Headline, Sprache und Canonical-Adresse; keine JavaScript-Fehler, fehlenden primären Bilder, gebrochenen Abschnittslinks oder horizontalen Überläufe.
 - Hero und Produktabschnitt bei 390/1440 Pixeln in Hell/Dunkel visuell geprüft. FAQ per Tastatur und genaue zugängliche Linknamen in beiden Sprachen geprüft. Screenshots liegen im ignorierten Ordner `receipts/`.
 
-Bestehende Grenze: Ohne JavaScript zeigt auch die englische Route die deutsche statische Fassung und ihre Metadaten. Der sichtbare No-JS-Hinweis benennt dies. Ein zusätzlicher statischer Sprach-Build ist nicht Bestandteil dieser redaktionellen Überarbeitung.
+Die beim Review benannte bisherige No-JS-Grenze wurde anschließend behoben: `npm run build:site` erzeugt mit der vorhandenen jsdom-Abhängigkeit eine echte englische HTML-Fassung aus denselben lokalen Texten. Der Deployment-Befehl führt den Build vor dem Upload aus. Eine weitere abgeschlossene CE-Prüfung (`20261031-000002-enstatic/review.json` im selben Review-Stammordner) fand keine materiellen Fehler. DE und EN wurden mit aktiviertem und deaktiviertem JavaScript im Browser geprüft.
 
 ## Abschluss
 
