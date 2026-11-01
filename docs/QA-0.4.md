@@ -15,6 +15,16 @@ Contract: [PLAN-0.4.md](PLAN-0.4.md). No MAID source code copied. Native impleme
 
 ## Delivery and rollback
 
-Pending exact source commit, release, installation and deployment readback below. The existing app/profile are backed up before installation. Stored conversation provider labels are optional and additive; old messages remain readable. No document migration or content rewrite is performed by installation. Restoring the previous app bundle is the code rollback; preserve app data and user files.
+Stored conversation provider labels are optional and additive; old messages remain readable. No document migration or content rewrite is performed by installation. Restoring the previous app bundle is the code rollback; preserve app data and user files.
 
-AC1–4 are covered by implementation and mechanical evidence. AC5 has the explicit external Claude sign-in limit above. AC6 is recorded after live delivery. No claim is made that an expired account has completed a successful Claude request.
+AC1–4 are covered by implementation and mechanical evidence. AC5 has the explicit external Claude sign-in limit above. AC6 is covered by the readbacks below. No claim is made that an expired account has completed a successful Claude request.
+
+## Delivery readback
+
+- Source commit `00125c2ac431a5649cfee36c651e3992fdf802da` pushed to `website/editor-value-proposition`. Existing [PR 1](https://github.com/MediaPublishing/markdown-magic/pull/1) updated and read back; it remains open and unmerged.
+- [Release v0.4.0](https://github.com/MediaPublishing/markdown-magic/releases/tag/v0.4.0) published as a beta with DMG and checksum. GitHub and local DMG SHA-256 agree: `e0933dd26bb08c503b486b789e6ad565aa6d0ff1efb9646c1eb9bcf782a555fb`. Public download HTTP 200.
+- Before installation, app and profile backed up to `/Users/MediaPublishing/AI/backups/markdown-magic-0.4.0-2026-11-01/`. All 546 original app entries and 593 profile entries matched their backup, including symlinks without following framework loops. The prior app bundle was moved to the macOS Trash.
+- Installed `/Applications/Markdown Magic.app` reports 0.4.0 and passes strict signature verification. Its `app.asar` hash matches the packaged app: `154fa43fbaf5c8a3e0e263e698a891737c4d42fe57c9333b62cabcef63b08a09`. It was reopened; the real app process was observed running.
+- All 5 review workflows passed against the actual installed executable with temporary profiles (12.2 seconds), including provider choice, persistence, attribution, preview and undo. The real profile was not used by tests.
+- Cloudflare production deployment `7837aa8a` completed from source commit `00125c2ac431a5649cfee36c651e3992fdf802da`. Live `/`, `/en/`, `/app.js` and the updated review screenshot match the local deployed bytes. Favicon, DMG and both official setup links return HTTP 200. Raw public readback: ignored `receipts/live-website-0.4.json`.
+- Claude sign-in remains the only external verification limit. The app, release, installed bundle and website were delivered without claiming a successful Claude response.
