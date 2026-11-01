@@ -50,7 +50,7 @@ export function validateConversations(value: unknown): Conversations {
   if (data?.version !== 1 || !Array.isArray(data.threads) || data.threads.length > 1000) throw new Error('Ungültige Gespräche.');
   for (const thread of data.threads) {
     if (typeof thread.id !== 'string' || thread.id.length > 160 || typeof thread.title !== 'string' || thread.title.length > 160 || typeof thread.createdAt !== 'string' || typeof thread.resolved !== 'boolean' || !Array.isArray(thread.messages) || thread.messages.length > 2000) throw new Error('Ungültiges Gespräch.');
-    for (const m of thread.messages) if (!['user', 'assistant'].includes(m?.role) || typeof m.text !== 'string' || m.text.length > 20_000) throw new Error('Ungültige Nachricht.');
+    for (const m of thread.messages) if (!['user', 'assistant'].includes(m?.role) || typeof m.text !== 'string' || m.text.length > 20_000 || (m.provider !== undefined && !['chatgpt', 'claude', 'local'].includes(m.provider))) throw new Error('Ungültige Nachricht.');
     const a = thread.anchor;
     if (a && (!Number.isSafeInteger(a.from) || !Number.isSafeInteger(a.to) || a.from < 0 || a.to < a.from || !['attached', 'changed', 'missing'].includes(a.status) || [a.quote, a.prefix, a.suffix].some(v => typeof v !== 'string') || a.quote.length > 350_000 || a.prefix.length > 48 || a.suffix.length > 48)) throw new Error('Ungültiger Textbezug.');
   }

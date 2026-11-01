@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
 import readline from 'node:readline';
+import type { AssistantChatMessage, AssistantProviderStatus } from '../shared/assistant';
+import { resolveAssistantBinary } from './assistant-binary';
 
 type JsonRpcMessage = {
   id?: number;
@@ -18,21 +18,12 @@ type CodexAccount = {
   planType?: string | null;
 };
 
-export type AssistantProviderStatus = {
-  kind: 'chatgpt' | 'offline';
-  connected: boolean;
-  label: string;
-  detail: string;
-};
-
 export type CodexAssistantDraft = {
   action: 'answer' | 'propose_edit';
   reply: string;
   summary: string | null;
   markdown: string | null;
 };
-
-export type CodexAssistantHistoryMessage = { role: 'user' | 'assistant'; text: string };
 
 type ProcessFactory = typeof spawn;
 
@@ -82,7 +73,7 @@ export async function createCodexAssistantDraft(
   prompt: string,
   markdown: string,
   documentTitle: string,
-  history: CodexAssistantHistoryMessage[] = [],
+  history: AssistantChatMessage[] = [],
   options: CodexAssistantOptions = {},
 ): Promise<CodexAssistantDraft> {
   if (markdown.length > MAX_ASSISTANT_DOCUMENT_LENGTH) throw new Error('Das Dokument ist für den ChatGPT-Assistenten zu gross.');
@@ -139,15 +130,9 @@ export async function createCodexAssistantDraft(
   });
 }
 
-function resolveCodexBinary(explicitBinary?: string): string {
-  if (explicitBinary) return explicitBinary;
-  const localBinary = path.join(os.homedir(), '.local', 'bin', 'codex');
-  return existsSync(localBinary) ? localBinary : 'codex';
-}
-
 async function withCodexAppServer<T>(options: CodexAssistantOptions, run: (session: CodexSession) => Promise<T>): Promise<T> {
   const spawnImpl = options.spawnImpl ?? spawn;
-  const child = spawnImpl(resolveCodexBinary(options.binary), [
+  const child = spawnImpl(options.binary ?? resolveAssistantBinary('chatgpt') ?? 'codex', [
     '-c', 'openai_base_url="https://chatgpt.com/backend-api/codex"',
     ...(options.model ? ['-c', `model="${options.model}"`] : []),
     'app-server',

@@ -15,8 +15,7 @@ import {
   upsertGroup,
 } from '../shared/workspace';
 import type { MarkdownMagicBridge, EditorTab, FileEntry, FileSystemNode, GroupColor, RecentDocument, RecentFolder, TabGroup, WorkspaceState } from '../shared/types';
-import type { AssistantChatMessage, AssistantProposal } from '../shared/assistant';
-import type { AssistantProviderStatus } from '../main/codex-assistant';
+import type { AssistantChatMessage, AssistantProposal, AssistantProvider, AssistantProviderStatus } from '../shared/assistant';
 import { locales, normalizeLocale, ONBOARDING_STEPS, translate, type Locale, type TranslationKey } from './i18n';
 import type { DocumentEditor } from './document-editor';
 import { createDocumentEditor } from './document-editor';
@@ -229,6 +228,11 @@ let assistantOpen = false;
 let assistantBusyPath: string | null = null;
 let assistantReturnFocus: HTMLElement | null = null;
 const assistantMessagesByPath = new Map<string, AssistantChatMessage[]>();
+const assistantProviderKey = 'markdown-magic:assistant-provider';
+const storedAssistantProvider = localStorage.getItem(assistantProviderKey);
+let assistantProvider: AssistantProvider = storedAssistantProvider === 'claude' || storedAssistantProvider === 'local' ? storedAssistantProvider : 'chatgpt';
+let assistantStatusChecking = false;
+let assistantStatusRequest = 0;
 let assistantProviderStatus: AssistantProviderStatus = {
   kind: 'offline',
   connected: false,
@@ -2103,12 +2107,45 @@ function assistantModeLabel(mode: AssistantProposal['mode']): string {
 }
 
 async function refreshAssistantProviderStatus(forceRefresh = false): Promise<void> {
+  const provider = assistantProvider;
+  const request = ++assistantStatusRequest;
+  assistantStatusChecking = true;
+  if (assistantOpen) renderAssistant();
   try {
-    assistantProviderStatus = await window.markdownMagic.getAssistantStatus(forceRefresh);
+    const status = await window.markdownMagic.getAssistantStatus(forceRefresh, provider);
+    if (request !== assistantStatusRequest) return;
+    assistantProviderStatus = status;
+    if (status.kind === 'offline' && !localStorage.getItem(assistantProviderKey)) {
+      assistantProvider = 'local';
+      assistantProviderStatus = { kind: 'local', connected: false, label: '', detail: '' };
+    }
   } catch {
+    if (request !== assistantStatusRequest) return;
     assistantProviderStatus = { kind: 'offline', connected: false, label: t('assistantProviderOffline'), detail: '' };
   }
+  if (request !== assistantStatusRequest) return;
+  assistantStatusChecking = false;
   if (assistantOpen) renderAssistant();
+}
+
+function assistantProviderLabel(provider: AssistantProvider): string {
+  return provider === 'local' ? t('assistantProviderOffline') : provider === 'claude' ? 'Claude' : 'ChatGPT';
+}
+
+function assistantConnectionLabel(): string {
+  if (assistantStatusChecking) return t('assistantChecking');
+  if (assistantProvider === 'local') return t('assistantOfflineNotice');
+  return assistantProviderStatus.connected ? t('assistantConnected') : t('assistantNotConnected');
+}
+
+function renderAssistantProvider(): string {
+  return `<section class="assistant-provider" aria-label="${t('assistantChooseProvider')}">
+    <div class="assistant-provider-row"><label for="assistant-provider">${t('assistantChooseProvider')}</label><select id="assistant-provider" ${assistantBusyPath ? 'disabled' : ''}>
+      ${(['chatgpt', 'claude', 'local'] as const).map((provider) => `<option value="${provider}" ${assistantProvider === provider ? 'selected' : ''}>${assistantProviderLabel(provider)}</option>`).join('')}
+    </select></div>
+    <div class="assistant-connection"><span role="status">${assistantConnectionLabel()}</span>${assistantProvider !== 'local' ? `<button type="button" class="ghost-action compact-action" data-assistant-check ${assistantStatusChecking ? 'disabled' : ''}>${t('assistantProviderCheck')}</button>` : ''}</div>
+    ${assistantProvider !== 'local' && !assistantStatusChecking && !assistantProviderStatus.connected ? `<div class="assistant-setup"><p>${assistantProviderStatus.installed ? t('assistantLoginHelp') : t('assistantInstallHelp')}</p><button type="button" class="ghost-action compact-action" data-assistant-setup>${assistantProviderStatus.installed ? t('assistantLogin') : t('assistantInstall')}</button><small>${t('assistantSubscriptionHelp')}</small></div>` : ''}
+  </section>`;
 }
 
 function renderAssistant(): void {
@@ -2130,17 +2167,24 @@ function renderAssistant(): void {
     </div>
   `).join('');
 
+  let providerControls = elements.assistantPanel.querySelector<HTMLElement>('.assistant-provider-controls');
+  if (!providerControls) {
+    providerControls = document.createElement('div');
+    providerControls.className = 'assistant-provider-controls';
+    elements.assistantBody.before(providerControls);
+  }
+  providerControls.innerHTML = renderAssistantProvider();
   elements.assistantBody.innerHTML = `
     ${tab ? renderConversationControls(tab.path, thread) : ''}
-    <p class="assistant-notice">${thread?.anchor && assistantProviderStatus.connected ? `${t('selectionScopeNotice')} ` : ''}${assistantProviderStatus.connected ? t('assistantChatGPTNotice') : t('assistantOfflineNotice')}</p>
+    <p class="assistant-notice">${thread?.anchor && assistantProvider !== 'local' ? `${t('selectionScopeNotice')} ` : ''}${assistantProvider === 'local' ? t('assistantOfflineNotice') : t('assistantSendNotice')}</p>
     ${!tab ? `<p class="assistant-message">${t('assistantNoDocument')}</p>` : ''}
     ${tab && messages.length === 0 ? `<p class="assistant-message">${t('assistantWelcome')}</p>` : ''}
-    ${messages.map((message) => `<div class="chat-message ${message.role}"><span>${message.role === 'user' ? t('assistantYou') : t('assistant')}</span><p>${escapeHtml(message.text).replace(/\n/g, '<br>')}</p></div>`).join('')}
+    ${messages.map((message) => `<div class="chat-message ${message.role}"><span>${message.role === 'user' ? t('assistantYou') : message.provider ? assistantProviderLabel(message.provider) : t('assistant')}</span><p>${escapeHtml(message.text).replace(/\n/g, '<br>')}</p></div>`).join('')}
     ${assistantBusy ? `<div class="chat-message assistant pending"><span>${t('assistant')}</span><p>${t('assistantBusy')}</p></div>` : ''}
     ${assistantProposal ? `
       <section class="proposal">
         <div><small>${t('assistantProposalTitle')}</small><strong>${escapeHtml(assistantProposal.summary)}</strong></div>
-        <p class="mode-label">${text('assistantProposalMode', assistantModeLabel(assistantProposal.mode))} · ${assistantProposal.provider === 'chatgpt' ? t('assistantProposalProviderChatGPT') : t('assistantProposalProviderLocal')}</p>
+        <p class="mode-label">${text('assistantProposalMode', assistantModeLabel(assistantProposal.mode))} · ${assistantProviderLabel(assistantProposal.provider)}</p>
         <div class="diff-view">${rows || `<p class="assistant-message">${t('assistantNoChanges')}</p>`}</div>
         ${truncated ? `<p class="assistant-truncated">${t('assistantDiffTooLarge')}</p>` : ''}
         <div class="proposal-actions">
@@ -2154,6 +2198,23 @@ function renderAssistant(): void {
   const heading = elements.assistantPanel.querySelector('header strong'); if (heading) heading.textContent = tab?.title ?? t('assistantActiveDocument');
   const quickCommands = elements.assistantPanel.querySelector<HTMLElement>('.quick-commands'); if (quickCommands) quickCommands.hidden = Boolean(thread?.anchor);
   if (tab) bindConversationControls(tab.path, thread);
+  providerControls.querySelector<HTMLSelectElement>('#assistant-provider')?.addEventListener('change', (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value !== 'chatgpt' && value !== 'claude' && value !== 'local') return;
+    assistantProvider = value;
+    localStorage.setItem(assistantProviderKey, value);
+    assistantProviderStatus = { kind: value, connected: false, label: '', detail: '' };
+    void refreshAssistantProviderStatus(true);
+  });
+  providerControls.querySelector('[data-assistant-check]')?.addEventListener('click', () => { void refreshAssistantProviderStatus(true); });
+  providerControls.querySelector<HTMLButtonElement>('[data-assistant-setup]')?.addEventListener('click', async (event) => {
+    (event.currentTarget as HTMLButtonElement).disabled = true;
+    try {
+      const result = await window.markdownMagic.setupAssistant(assistantProvider);
+      setStatus(result.ok ? t('assistantSetupOpened') : result.error ?? t('assistantProposeFailed'), !result.ok);
+    } catch { setStatus(t('assistantProposeFailed'), true); }
+    renderAssistant();
+  });
   elements.assistantActions.innerHTML = undo ? `<button class="ghost-action undo-action" type="button" data-action="assistant-undo"><span>${iconMarkup(undoIcon)}</span><span>${t('assistantUndo')}</span></button>` : '';
   const latestAssistantMessage = messages.findLast((message) => message.role === 'assistant');
   elements.assistantAnnouncement.textContent = assistantBusy ? t('assistantBusy') : latestAssistantMessage?.text ?? '';
@@ -2174,6 +2235,7 @@ async function runAssistantProposal(prompt: string): Promise<void> {
   }
   const request = prompt.trim();
   if (!request || assistantBusyPath) return;
+  const requestProvider = assistantProvider;
   const requestPath = tab.path;
   await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
   const thread = activeConversation(tab.path) ?? newConversation(tab.path);
@@ -2186,22 +2248,21 @@ async function runAssistantProposal(prompt: string): Promise<void> {
   await saveConversations(tab.path);
   if (elements) elements.assistantPrompt.value = '';
   assistantProposalsByPath.delete(requestPath);
-  assistantBusyPath = requestPath;
   renderAssistant();
   try {
     const documentMarkdown = sessions.get(tab.id)?.editor?.getMarkdown();
     if (documentMarkdown === undefined) throw new Error(t('assistantNoDocument'));
     const targetAnchor = thread.anchor ? { ...thread.anchor } : undefined;
     const markdown = targetAnchor ? documentMarkdown.slice(targetAnchor.from, targetAnchor.to) : documentMarkdown;
-    const result = await window.markdownMagic.proposeAssistant(request, markdown, targetAnchor ? `${tab.title} · ${t('selectedPassage')}` : tab.title, history, targetAnchor ? 'passage' : undefined);
+    const result = await window.markdownMagic.proposeAssistant(request, markdown, targetAnchor ? `${tab.title} · ${t('selectedPassage')}` : tab.title, history, targetAnchor ? 'passage' : undefined, requestProvider);
     if (!result.ok || !result.reply) {
       const error = result.error ?? t('assistantProposeFailed');
-      thread.messages.push({ role: 'assistant', text: error });
+      thread.messages.push({ role: 'assistant', text: error, provider: requestProvider });
       if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
       if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(error, true);
       return;
     }
-    thread.messages.push({ role: 'assistant', text: result.reply });
+    thread.messages.push({ role: 'assistant', text: result.reply, provider: result.proposal?.provider ?? requestProvider });
     if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
     if (result.proposal && selectedConversation.get(requestPath) === thread.id) {
       assistantProposalsByPath.set(requestPath, { proposal: result.proposal, base: markdown, anchor: targetAnchor, threadId: thread.id });
@@ -2209,7 +2270,7 @@ async function runAssistantProposal(prompt: string): Promise<void> {
     }
   } catch (error) {
     const message = errorMessage(error, t('assistantProposeFailed'));
-    thread.messages.push({ role: 'assistant', text: message });
+    thread.messages.push({ role: 'assistant', text: message, provider: requestProvider });
     if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
     if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(message, true);
   } finally {
@@ -3709,7 +3770,7 @@ function showSettings(): void {
     <p class="settings-description">${t('settingsDescription')}</p>
     <div class="settings-list">
       <section><strong>${locale === 'de' ? 'Arbeitsbereich' : 'Workspace'}</strong><span title="${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}">${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-folder>${t('chooseFolder')}</button></div></section>
-      <section><strong>${t('assistant')}</strong><span>${assistantProviderStatus.connected ? t('assistantProviderChatGPT') : t('assistantProviderOffline')}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-assistant>${locale === 'de' ? 'Chat öffnen' : 'Open chat'}</button><button class="ghost-action" type="button" data-settings-assistant-status>${t('assistantProviderCheck')}</button></div></section>
+      <section><strong>${t('assistant')}</strong><span>${assistantProviderLabel(assistantProvider)} · ${assistantConnectionLabel()}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-assistant>${locale === 'de' ? 'Anbieter & Chat öffnen' : 'Open provider & chat'}</button><button class="ghost-action" type="button" data-settings-assistant-status>${t('assistantProviderCheck')}</button></div></section>
       <section><strong>${t('language')} &amp; ${t('appearance')}</strong><span>${locale === 'de' ? 'Deutsch' : 'English'} · ${themeLabel()}</span><div class="settings-actions"><button type="button" class="ghost-action" data-settings-language>${locale === 'de' ? 'English' : 'Deutsch'}</button><button type="button" class="ghost-action" data-settings-theme>${themeLabel()}</button></div></section>
     </div>
     <div class="dialog-actions"><button type="button" class="ghost-action" data-settings-onboarding>${locale === 'de' ? 'Kurze Einführung' : 'Quick introduction'}</button><button type="button" class="primary-action" data-cancel>${t('close')}</button></div>

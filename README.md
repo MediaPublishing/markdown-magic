@@ -4,7 +4,7 @@
 
 Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev/) · [Download 0.3.0 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.3.0.md)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.4.0 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.0/Markdown-Magic-0.4.0-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.4.0.md)
 
 ![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
@@ -43,7 +43,7 @@ Markiere eine Passage und drücke **⇧⌘K**. **Nur notieren** speichert einen 
 
 ## Installation und Updates
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg).
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.0/Markdown-Magic-0.4.0-arm64.dmg).
 2. `Markdown Magic.app` nach `Programme` ziehen.
 3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
 
@@ -53,7 +53,7 @@ Vorhandene Sitzungen werden mit einer Sicherung der alten Sitzungsdatei übernom
 
 ## Datenschutz
 
-Schreiben benötigt weder Konto noch Internet. Keine Telemetrie, kein proprietäres Dokumentformat. Der optionale Online-Assistent verwendet den vorhandenen lokalen Codex-Zugang und überträgt Dokumentinhalt erst nach einer bewussten Anfrage. Die Offline-Dokumenthilfe ist regelbasiert.
+Schreiben benötigt weder Konto noch Internet. Keine Telemetrie, kein proprietäres Dokumentformat. Wähle Claude, ChatGPT oder lokale Werkzeuge im Assistenten. Claude nutzt dein Abo über die offizielle lokale Claude-Code-Anwendung, ChatGPT über Codex. Anmeldung und Zugangsdaten bleiben beim offiziellen Programm; die Limits deines Abos gelten weiter. Erst Senden überträgt den Text samt Gespräch. Änderungen erscheinen als Vorschau mit Übernehmen und Rückgängig. Die Offline-Dokumenthilfe ist regelbasiert.
 
 ## Entwicklung
 
@@ -70,7 +70,7 @@ Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test
 
 A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Download 0.3.0 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Release notes](docs/RELEASE-0.3.0.md)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.4.0 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.0/Markdown-Magic-0.4.0-arm64.dmg) · [Release notes](docs/RELEASE-0.4.0.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
@@ -107,11 +107,11 @@ Select a passage and press **⇧⌘K**. **Keep as note** stores a local comment.
 
 ## Install and update
 
-[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.0/Markdown-Magic-0.4.0-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
 
 **Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
 
-Writing needs no account or internet connection. No telemetry or proprietary format. The optional online assistant uses the existing local Codex sign-in and sends document content only after an explicit request. Offline document help uses rules, not a language model.
+Writing needs no account or internet connection. No telemetry or proprietary format. Choose Claude, ChatGPT or local tools in the assistant. Claude runs your installed official Claude Code application; ChatGPT uses Codex. Sign-in and credentials stay with the official program, and subscription limits apply. Only Send shares text and conversation. Changes appear as a preview with Apply and Undo. Offline document help uses rules, not a language model.
 
 ## License
 

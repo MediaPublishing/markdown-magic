@@ -29,6 +29,46 @@ async function selectText(page: Page, text: string, last = false) {
 }
 async function history(page: Page) { await page.locator('.document-title').click(); await page.locator('[data-document-action="history"]').click(); }
 
+test('chooses subscription providers, persists the choice and preserves preview, attribution and undo', async () => {
+  const f = await setup();
+  try {
+    await f.app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('assistant:status'); ipcMain.handle('assistant:status', (_e, _force, provider) => ({ kind: provider, connected: provider !== 'local', installed: true, label: provider, detail: '' }));
+      ipcMain.removeHandler('assistant:propose'); ipcMain.handle('assistant:propose', (_e, _prompt, markdown, _title, _history, _scope, provider) => ({ ok: true, reply: `Antwort von ${provider}`, proposal: { id: provider, mode: 'custom', language: 'de', summary: `Vorschlag von ${provider}`, markdown: markdown.replace('Erster Absatz.', 'Kurz.'), baseContentHash: '', createdAt: new Date().toISOString(), provider } }));
+    });
+    await f.page.getByTestId('assistant-toggle').click();
+    await f.page.locator('#assistant-provider').selectOption('claude');
+    await expect(f.page.locator('.assistant-connection')).toContainText('Abo verbunden');
+    await f.page.locator('#assistant-prompt').fill('Eine lokale Notiz.'); await f.page.locator('[data-action="assistant-note"]').click();
+    await expect(f.page.locator('.proposal')).toHaveCount(0);
+    await f.page.locator('#assistant-prompt').fill('Kürzen'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.proposal .mode-label')).toContainText('Claude');
+    await expect(f.page.locator('.ProseMirror:visible')).toContainText('Erster Absatz.');
+    await f.page.locator('[data-action="assistant-apply"]').click(); await expect(f.page.locator('.ProseMirror:visible')).toContainText('Kurz.');
+    await f.page.locator('[data-action="assistant-undo"]').click(); await expect(f.page.locator('.ProseMirror:visible')).toContainText('Erster Absatz.');
+    await f.page.locator('#assistant-provider').selectOption('chatgpt');
+    await f.page.locator('#assistant-prompt').fill('Kürzen'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.proposal .mode-label')).toContainText('ChatGPT');
+    await expect(f.page.locator('.chat-message.assistant').filter({ hasText: 'Antwort von claude' }).locator('span')).toHaveText('Claude');
+    await f.page.locator('#assistant-provider').selectOption('claude');
+    await f.page.reload(); await expect(f.page.locator('.ProseMirror:visible')).toBeVisible(); await f.page.getByTestId('assistant-toggle').click();
+    await expect(f.page.locator('#assistant-provider')).toHaveValue('claude');
+    await expect(f.page.locator('.chat-message.assistant').filter({ hasText: 'Antwort von chatgpt' }).locator('span')).toHaveText('ChatGPT');
+    for (const theme of ['light', 'dark']) {
+      await f.page.evaluate((value) => localStorage.setItem('markdown-magic:theme', value), theme); await f.page.reload();
+      await expect(f.page.locator('.ProseMirror:visible')).toBeVisible(); await f.page.getByTestId('assistant-toggle').click();
+      for (const width of [900, 1360]) {
+        await f.page.setViewportSize({ width, height: width === 900 ? 700 : 900 });
+        await expect(f.page.locator('#assistant-provider')).toBeVisible();
+        await f.page.screenshot({ path: `receipts/providers-${theme}-${width}.png` });
+      }
+    }
+    await f.app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('assistant:status'); ipcMain.handle('assistant:status', (_e, _force, provider) => ({ kind: provider, installed: false, connected: false, label: provider, detail: '' })); });
+    await f.page.locator('[data-assistant-check]').click(); await expect(f.page.locator('[data-assistant-setup]')).toHaveText('Installation öffnen');
+    await expect(f.page.locator('.assistant-setup')).toContainText('Limits deines Abos');
+  } finally { await f.app.close(); }
+});
+
 test('named versions capture editor text, compare separated changes and survive restart', async () => {
   const f = await setup(); let app = f.app;
   try {

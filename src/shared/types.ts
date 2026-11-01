@@ -1,6 +1,5 @@
 import type { Conversations } from './conversations';
-import type { AssistantChatMessage, AssistantChatResponse } from './assistant';
-import type { AssistantProviderStatus } from '../main/codex-assistant';
+import type { AssistantChatMessage, AssistantChatResponse, AssistantProvider, AssistantProviderStatus } from './assistant';
 
 export const MARKDOWN_EXTENSIONS = ['.md', '.markdown'] as const;
 
@@ -123,8 +122,9 @@ export type MarkdownMagicBridge = {
   createFile(rootPath: string, fileName: string): Promise<OperationResult & { path?: string }>;
   chooseDocument(): Promise<OperationResult & { state?: WorkspaceState; files?: FileEntry[] }>;
   revealApp(): Promise<OperationResult>;
-  getAssistantStatus(forceRefresh?: boolean): Promise<AssistantProviderStatus>;
-  proposeAssistant(prompt: string, markdown: string, documentTitle: string, history?: AssistantChatMessage[], scope?: 'passage'): Promise<OperationResult & Partial<AssistantChatResponse>>;
+  getAssistantStatus(forceRefresh?: boolean, provider?: AssistantProvider): Promise<AssistantProviderStatus>;
+  setupAssistant(provider: AssistantProvider): Promise<OperationResult>;
+  proposeAssistant(prompt: string, markdown: string, documentTitle: string, history?: AssistantChatMessage[], scope?: 'passage', provider?: AssistantProvider): Promise<OperationResult & Partial<AssistantChatResponse>>;
   readConversations(path: string): Promise<OperationResult & { data?: Conversations }>;
   writeConversations(path: string, data: Conversations): Promise<OperationResult>;
   recordVersion(path: string, content: string, label: string): Promise<OperationResult>;
