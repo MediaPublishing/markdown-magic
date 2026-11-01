@@ -22,4 +22,6 @@ Die beim Review benannte bisherige No-JS-Grenze wurde anschließend behoben: `np
 
 ## Abschluss
 
-Deployment und GitHub-Readback werden nach Veröffentlichung ergänzt. Der vorherige Pages-Deploymentstand bleibt als Rückweg erhalten.
+Produktiv veröffentlicht mit Cloudflare-Pages-Deployment `d795c8ba`, Quellstand `759ab92`. Die Live-HTML-Dateien für `/` und `/en/` sowie `app.js` sind bytegleich mit den lokalen Artefakten. Beide Live-Routen wurden im Browser mit und ohne JavaScript geprüft: richtige Headline, Sprache und Seitentitel, kein horizontaler Überlauf. Die bisherigen Pages-Deployments bleiben als Rückweg erhalten.
+
+Die Implementierungs-Commits `6d3f71c` und `759ab92` sind auf `website/editor-value-proposition` gepusht. [Pull Request 1](https://github.com/MediaPublishing/markdown-magic/pull/1) enthält die Änderung; der PR ist offen, die Website bereits veröffentlicht. Der Pipeline-Aufruf von `ce-commit-push-pr` startet gemäß dessen Handoff-Regel keinen zusätzlichen PR-Watcher.
