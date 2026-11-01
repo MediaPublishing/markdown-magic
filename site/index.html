@@ -1,239 +1,94 @@
 <!doctype html>
 <html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#17191d" media="(prefers-color-scheme: dark)" />
-    <meta
-      name="description"
-      content="Markdown Magic ist ein ruhiger, visueller Markdown-Editor für lokale Dateien und automatische Entwürfe auf dem Mac."
-    />
-    <meta property="og:title" content="Markdown Magic" />
-    <meta
-      property="og:description"
-      content="Sofort schreiben. Markdown Magic hält neue Texte als lokale Entwürfe fest, bis du sie benennst und ablegst."
-    />
-    <meta property="og:image" content="https://markdown-magic.pages.dev/assets/screenshots/workspace-light.png?v=0.3.0" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://markdown-magic.pages.dev/" />
-    <link rel="canonical" href="https://markdown-magic.pages.dev/" />
-    <link rel="alternate" hreflang="de" href="https://markdown-magic.pages.dev/" />
-    <link rel="alternate" hreflang="en" href="https://markdown-magic.pages.dev/en/" />
-    <link rel="alternate" hreflang="x-default" href="https://markdown-magic.pages.dev/" />
-    <title>Markdown Magic – sofort schreiben, später ablegen</title>
-    <link rel="icon" href="/favicon.ico?v=0.3.0" sizes="16x16 32x32" type="image/x-icon" />
-    <link rel="icon" href="/favicon-32.png?v=0.3.0" sizes="32x32" type="image/png" />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <a class="skip-link" href="#main" data-copy="skipLink">Zum Inhalt</a>
-    <noscript>
-      <p class="no-script">
-        <span lang="de">Diese Seite wird ohne JavaScript auf Deutsch angezeigt.</span>
-        <span lang="en">This page is shown in German when JavaScript is disabled.</span>
-      </p>
-    </noscript>
-
-    <header class="site-header">
-      <a class="brand" href="#top" data-copy-aria="homeLabel" aria-label="Markdown Magic Startseite">
-        <img src="/assets/markdown-magic-mark.png" alt="" width="40" height="40" />
-        <span>Markdown Magic</span>
-      </a>
-      <nav data-copy-aria="navLabel" aria-label="Hauptnavigation">
-        <a href="#drafts" data-copy="navDrafts">Entwürfe</a>
-        <a href="#files" data-copy="navFiles">Dateien</a>
-        <a href="#download" data-copy="navDownload">Download</a>
-      </nav>
-      <div class="header-actions">
-        <div class="language-switch" data-copy-aria="languageLabel" aria-label="Sprache">
-          <a href="/" lang="de" hreflang="de" aria-current="page">DE</a>
-          <a href="/en/" lang="en" hreflang="en">EN</a>
-        </div>
-        <a
-          class="button small"
-          href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg"
-          data-copy="headerDownload"
-        >Beta laden</a>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Markdown schreiben, visuell formatieren und mit Kommentaren und Fassungen überarbeiten. Markdown Magic für Mac. Lokale Dateien, Markdown- und PDF-Ausgabe.">
+  <meta name="theme-color" content="#f7f7f5">
+  <title>Markdown Magic – vom Entwurf zum fertigen Text</title>
+  <meta property="og:title" content="Markdown Magic – dein Markdown-Editor für Mac">
+  <meta property="og:description" content="Schreibe und formatiere direkt im Text. Überarbeite mit Kommentaren und Fassungen. Gib deine Arbeit als Markdown oder PDF weiter.">
+  <meta property="og:image" content="https://markdown-magic.pages.dev/assets/screenshots/workspace-light.png?v=0.3.0">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://markdown-magic.pages.dev/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://markdown-magic.pages.dev/">
+  <link rel="alternate" hreflang="de" href="https://markdown-magic.pages.dev/">
+  <link rel="alternate" hreflang="en" href="https://markdown-magic.pages.dev/en/">
+  <link rel="alternate" hreflang="x-default" href="https://markdown-magic.pages.dev/">
+  <link rel="icon" href="/favicon.ico?v=0.3.0" sizes="16x16 32x32" type="image/x-icon">
+  <link rel="icon" href="/favicon-32.png?v=0.3.0" sizes="32x32" type="image/png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main" data-copy="skip">Zum Inhalt</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Markdown Magic"><img src="/assets/markdown-magic-mark.png" width="32" height="32" alt=""><span>Markdown Magic</span></a>
+    <nav aria-label="Navigation">
+      <a href="#editor" data-copy="navEditor">Editor</a><a href="#review" data-copy="navReview">Überarbeiten</a><a href="#questions" data-copy="navQuestions">Fragen</a>
+    </nav>
+    <div class="header-actions">
+      <div class="language-switch" aria-label="Language"><a href="/" hreflang="de" lang="de" aria-current="page">DE</a><a href="/en/" hreflang="en" lang="en">EN</a></div>
+      <a class="button small" href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg" data-copy="headerDownload">Für Mac laden</a>
+    </div>
+  </header>
+  <main id="main">
+    <section class="hero section-shell" id="top">
+      <p class="eyebrow" data-copy="eyebrow">Visueller Markdown-Editor für Mac</p>
+      <h1 data-copy="heroTitle">Dein Markdown-Editor.<br>Vom Entwurf zum fertigen Text.</h1>
+      <p class="lead" data-copy="heroLead">Schreibe und formatiere Artikel, Notizen und Dokumente direkt im Text. Überarbeite mit Kommentaren und Fassungen. Gib deine Arbeit als Markdown oder PDF weiter.</p>
+      <div class="hero-actions"><a class="button primary" href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg" data-copy="download">Für Mac herunterladen</a><a class="text-link" href="#editor" data-copy="seeEditor">Editor ansehen</a></div>
+      <p class="compatibility" data-copy="compatibility">v0.3.0 Beta · Apple Silicon · macOS 13+</p>
+      <figure class="product-shot hero-shot">
+        <img src="/assets/screenshots/workspace-light.png?v=0.3.0" width="1360" height="900" fetchpriority="high" alt="Markdown Magic mit einem formatierten Artikel, Werkzeugleiste und lokalen Entwürfen" data-alt="heroAlt">
+        <figcaption data-copy="heroCaption">Dein Text im Mittelpunkt. Formatierung und Dokumente direkt erreichbar.</figcaption>
+      </figure>
+    </section>
+    <div class="workflow-strip section-shell" aria-label="Workflow">
+      <a href="#editor"><span>01</span><strong data-copy="flowWrite">Schreiben & formatieren</strong></a>
+      <a href="#review"><span>02</span><strong data-copy="flowReview">Kommentieren & überarbeiten</strong></a>
+      <a href="#files"><span>03</span><strong data-copy="flowShare">Als Datei weitergeben</strong></a>
+    </div>
+    <section class="feature section-shell" id="editor" aria-labelledby="editor-title">
+      <div class="feature-copy">
+        <p class="eyebrow" data-copy="editorKicker">Am Text arbeiten</p>
+        <h2 id="editor-title" data-copy="editorTitle">Die Formatierung sehen.<br>Direkt darin schreiben.</h2>
+        <p data-copy="editorText">Setze Überschriften, formatiere Listen und ergänze Links oder Bilder im visuellen Editor. So siehst du beim Schreiben, wie dein Dokument aufgebaut ist.</p>
+        <ul class="feature-points"><li data-copy="editorPoint1">Suchen, Ersetzen und Gliederung für längere Texte.</li><li data-copy="editorPoint2">Quelltextansicht pro Dokument, wenn du Markdown direkt bearbeiten möchtest.</li><li data-copy="editorPoint3">Seitenvorschau, Dokumentzoom und vertraute Mac-Kürzel.</li></ul>
       </div>
-    </header>
-
-    <main id="main">
-      <section class="hero" id="top">
-        <div class="hero-copy">
-          <p class="release-line"><span class="release-dot" aria-hidden="true"></span><span data-copy="releaseLine">Version 0.3 Beta für macOS</span></p>
-          <h1 data-copy="heroTitle">Schreib zuerst.<br />Speicher später.</h1>
-          <p class="lead" data-copy="heroLead">Öffne ein neues Dokument und leg direkt los. Markdown Magic hält deinen Text als lokalen Entwurf fest. Name und Speicherort wählst du, wenn es für dich passt.</p>
-          <div class="hero-actions">
-            <a
-              class="button primary"
-              href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg"
-            >
-              <span data-copy="downloadMac">Für Mac herunterladen</span>
-              <small>v0.3.0 · Apple Silicon</small>
-            </a>
-            <a class="text-action" href="#drafts" data-copy="seeHow">So funktionieren Entwürfe</a>
-          </div>
-          <p class="compatibility" data-copy="compatibility">macOS 13+ · Beta · ad hoc signiert, nicht notarisiert</p>
-        </div>
-
-        <figure class="app-stage hero-stage">
-          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-          <img
-            src="/assets/screenshots/workspace-light.png?v=0.3.0"
-            alt="Markdown Magic mit Entwürfen, Dokumentnavigation und visuellem Editor"
-            data-alt="heroAlt"
-            width="1360"
-            height="900"
-          />
-          <figcaption data-copy="heroCaption">Deine letzten Texte, Entwürfe und Orte bleiben in Reichweite.</figcaption>
-        </figure>
-      </section>
-
-      <section class="draft-story" id="drafts" aria-labelledby="draft-title">
-        <div class="section-intro">
-          <p class="section-number">01</p>
-          <div>
-            <p class="kicker" data-copy="draftKicker">Der neue Schreibfluss</p>
-            <h2 id="draft-title" data-copy="draftTitle">Ein leerer Text braucht noch keinen Dateinamen.</h2>
-          </div>
-        </div>
-
-        <ol class="draft-steps">
-          <li>
-            <span class="step-index">1</span>
-            <div>
-              <h3 data-copy="draft1Title">Anfangen</h3>
-              <p data-copy="draft1Text">⌘N öffnet sofort ein neues Dokument und setzt den Cursor an die richtige Stelle.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-index">2</span>
-            <div>
-              <h3 data-copy="draft2Title">Weiterschreiben</h3>
-              <p data-copy="draft2Text">Markdown Magic sichert nichtleere Entwürfe lokal. Du kannst schließen und nach einem Neustart zurückkehren.</p>
-            </div>
-          </li>
-          <li>
-            <span class="step-index">3</span>
-            <div>
-              <h3 data-copy="draft3Title">Ablegen</h3>
-              <p data-copy="draft3Text">Wenn der Text einen Platz braucht, wählst du Name und Ordner im vertrauten macOS-Dialog. Abbrechen lässt den Entwurf bestehen.</p>
-            </div>
-          </li>
-        </ol>
-      </section>
-
-      <section class="editor-story section-shell" aria-labelledby="editor-title">
-        <div class="story-copy">
-          <p class="kicker" data-copy="editorKicker">Visuelles Markdown</p>
-          <h2 id="editor-title" data-copy="editorTitle">Format sehen. In Markdown bleiben.</h2>
-          <p data-copy="editorText">Überschriften, Listen, Links und Hervorhebungen bearbeitest du direkt im formatierten Text. Für Suchen, Speichern, Drucken und neue Dokumente funktionieren die vertrauten Mac-Kürzel.</p>
-        </div>
-        <figure class="app-stage side-stage">
-          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-          <img
-            src="/assets/screenshots/pages-light.png?v=0.3.0"
-            alt="Ein formatierter Markdown-Text in Markdown Magic"
-            data-alt="editorAlt"
-            width="1360"
-            height="900"
-            loading="lazy"
-          />
-          <figcaption data-copy="editorCaption">Der Text bleibt im Mittelpunkt, Werkzeuge bleiben nah.</figcaption>
-        </figure>
-      </section>
-
-      <section class="editor-story section-shell" aria-labelledby="review-title">
-        <div class="story-copy">
-          <p class="kicker" data-copy="reviewKicker">Lektorat an deiner Textstelle</p>
-          <h2 id="review-title" data-copy="reviewTitle">Ein Absatz. Ein Gedanke. Ein Gespräch.</h2>
-          <p data-copy="reviewText">Markiere eine Passage und halte eine lokale Notiz fest. Wenn du möchtest, besprichst du sie mit dem vorhandenen Assistenten. Einen Vorschlag prüfst du vor der Übernahme; der übrige Text bleibt erhalten.</p>
-        </div>
-        <figure class="app-stage side-stage">
-          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-          <img src="/assets/screenshots/review-light.png?v=0.3.0" width="1360" height="900" loading="lazy" data-alt="reviewAlt" alt="Markdown Magic mit ausgewählter Passage und lokaler Notiz">
-          <figcaption data-copy="reviewCaption">Notizen und Gespräche bleiben lokal am Dokument, auch nach einem Neustart.</figcaption>
-        </figure>
-      </section>
-
-      <section class="file-story" id="files" aria-labelledby="files-title">
-        <div class="file-copy section-shell">
-          <div class="section-intro">
-            <p class="section-number">02</p>
-            <div>
-              <p class="kicker" data-copy="filesKicker">Normale lokale Dateien</p>
-              <h2 id="files-title" data-copy="filesTitle">Deine Ablage bleibt deine Ablage.</h2>
-            </div>
-          </div>
-          <div class="file-principles">
-            <p data-copy="fileIntro">Markdown Magic arbeitet mit den Markdown- und Textdateien auf deinem Mac. Bestehende Dateien bleiben an ihrem Ort.</p>
-            <ul>
-              <li><strong data-copy="file1Title">Lesbar</strong><span data-copy="file1Text">Markdown bleibt ein normales Dateiformat, das andere Apps öffnen können.</span></li>
-              <li><strong data-copy="file2Title">Kontrollierbar</strong><span data-copy="file2Text">Die Quellansicht macht Frontmatter und besondere Markdown-Syntax direkt prüfbar.</span></li>
-              <li><strong data-copy="file3Title">Ohne Voraussetzung</strong><span data-copy="file3Text">Du brauchst weder ein Konto noch eine AI-Einrichtung, um zu schreiben.</span></li>
-            </ul>
-          </div>
-        </div>
-
-        <figure class="app-stage full-stage">
-          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span></div>
-          <img
-            src="/assets/screenshots/focus-dark.png?v=0.3.0"
-            alt="Markdown Magic im ruhigen dunklen Schreibmodus"
-            data-alt="focusAlt"
-            width="1360"
-            height="900"
-            loading="lazy"
-          />
-          <figcaption data-copy="focusCaption">Hell, dunkel oder wie dein Mac. Die Darstellung folgt deinem System.</figcaption>
-        </figure>
-      </section>
-
-      <section class="new-section section-shell" aria-labelledby="new-title">
-        <div class="new-heading">
-          <p class="kicker" data-copy="newKicker">Neu in 0.3</p>
-          <h2 id="new-title" data-copy="newTitle">Überarbeiten mit einem sicheren Rückweg.</h2>
-        </div>
-        <dl class="new-list">
-          <div><dt data-copy="new1Title">Benannte Fassungen</dt><dd data-copy="new1Text">Halte „Vor der Kürzung“ fest und vergleiche später die Änderungen. Automatische Sicherungen bleiben daneben erhalten.</dd></div>
-          <div><dt data-copy="new2Title">Passagen besprechen</dt><dd data-copy="new2Text">Markiere Text und öffne mit ⇧⌘K ein Gespräch zu genau dieser Stelle. Vorschläge werden erst nach deiner Übernahme angewendet.</dd></div>
-          <div><dt data-copy="new3Title">Lokale Notizen</dt><dd data-copy="new3Text">Kommentare brauchen weder Konto noch Internet. Gespräche bleiben im lokalen App-Datenordner, ohne Begleitdateien im geteilten Ordner.</dd></div>
-          <div><dt data-copy="new4Title">Geprüfte Änderungen</dt><dd data-copy="new4Text">Hat sich die besprochene Stelle geändert, wird ein veralteter Vorschlag nicht blind angewendet. Übernommene Änderungen lassen sich zurücknehmen.</dd></div>
-        </dl>
-      </section>
-
-      <section class="install" id="download" aria-labelledby="download-title">
-        <div class="install-inner">
-          <div class="install-copy">
-            <p class="kicker" data-copy="installKicker">Beta für Apple Silicon</p>
-            <h2 id="download-title" data-copy="installTitle">Markdown Magic 0.3 ausprobieren.</h2>
-            <p data-copy="installText">Die Beta läuft auf Macs mit Apple Chip ab macOS 13. Sie ist ad hoc signiert und noch nicht von Apple notarisiert.</p>
-            <div class="install-actions">
-              <a
-                class="button primary light-button"
-                href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg"
-                data-copy="downloadNow"
-              >DMG herunterladen</a>
-              <a class="release-link" href="https://github.com/MediaPublishing/markdown-magic/releases" data-copy="allReleases">Versionshinweise ansehen</a>
-            </div>
-          </div>
-          <ol class="install-steps">
-            <li><span>1</span><p><strong data-copy="install1Title">DMG öffnen</strong><small data-copy="install1Text">Lade die Datei und öffne das Image.</small></p></li>
-            <li><span>2</span><p><strong data-copy="install2Title">App verschieben</strong><small data-copy="install2Text">Ziehe Markdown Magic in den Ordner Programme.</small></p></li>
-            <li><span>3</span><p><strong data-copy="install3Title">Ersten Start bestätigen</strong><small data-copy="install3Text">Falls macOS den Start blockiert: Prüfe die App unter Systemeinstellungen → Datenschutz & Sicherheit und bestätige dort „Dennoch öffnen“.</small></p></li>
-          </ol>
-          <p><a class="text-action" href="https://support.apple.com/102445" data-copy="appleHelp">Apples Hinweise zum ersten Start</a></p>
-        </div>
-      </section>
-    </main>
-
-    <footer>
-      <a class="brand" href="#top"><img src="/assets/markdown-magic-mark.png" alt="" width="36" height="36" /><span>Markdown Magic</span></a>
-      <p data-copy="footerText">Ein ruhiger Schreibplatz für normale Markdown-Dateien.</p>
-      <a href="https://github.com/MediaPublishing/markdown-magic/releases" data-copy="footerReleases">Releases</a>
-    </footer>
-
-    <script src="/app.js"></script>
-  </body>
+      <figure class="product-shot"><img src="/assets/screenshots/pages-light.png?v=0.3.0" width="1360" height="900" loading="lazy" alt="Markdown Magic mit formatiertem Dokument in der Seitenvorschau" data-alt="editorAlt"><figcaption data-copy="editorCaption">Von der einzelnen Notiz bis zum längeren Artikel.</figcaption></figure>
+    </section>
+    <section class="review-section" id="review" aria-labelledby="review-title">
+      <div class="section-shell">
+        <div class="section-heading"><p class="eyebrow" data-copy="reviewKicker">Gezielt überarbeiten</p><h2 id="review-title" data-copy="reviewTitle">Die richtige Stelle.<br>Der nächste gute Satz.</h2><p data-copy="reviewText">Markiere eine Passage, halte eine Notiz fest oder besprich sie mit dem optionalen Assistenten. Du prüfst den Vorschlag und entscheidest, was in deinen Text kommt.</p></div>
+        <figure class="product-shot"><img src="/assets/screenshots/review-light.png?v=0.3.0" width="1360" height="900" loading="lazy" alt="Ausgewählte Passage und zugehöriger Kommentar im Seitenpanel" data-alt="reviewAlt"><figcaption data-copy="reviewCaption">Passage markieren, ⇧⌘K drücken und das Gespräch direkt an der Stelle führen.</figcaption></figure>
+        <ol class="review-steps"><li><strong data-copy="reviewStep1">Eine Notiz für später.</strong><p data-copy="reviewStep1Text">„Hier fehlt ein Beispiel.“ Kommentare bleiben lokal am Dokument und sind nach einem Neustart wieder da.</p></li><li><strong data-copy="reviewStep2">Ein Vorschlag zum Prüfen.</strong><p data-copy="reviewStep2Text">Der Assistent bearbeitet auf deinen Auftrag die ausgewählte Passage. Erst „Übernehmen“ ändert deinen Text.</p></li><li><strong data-copy="reviewStep3">Ein klarer Rückweg.</strong><p data-copy="reviewStep3Text">Übernommene Änderungen lassen sich zurücknehmen. Hat sich die Passage inzwischen geändert, wird der Vorschlag nicht blind eingefügt.</p></li></ol>
+      </div>
+    </section>
+    <section class="feature versions-feature section-shell" aria-labelledby="versions-title">
+      <div class="feature-copy"><p class="eyebrow" data-copy="versionsKicker">Fassungen behalten</p><h2 id="versions-title" data-copy="versionsTitle">Vor der Kürzung.<br>Nach der Überarbeitung.<br>Beides bleibt erreichbar.</h2><p data-copy="versionsText">Gib wichtigen Arbeitsständen einen Namen. Vergleiche eine Fassung mit dem aktuellen Text, öffne sie als Kopie oder stelle sie wieder her. Automatische Sicherungen bleiben daneben erhalten.</p><p class="detail-note" data-copy="versionsNote">Benannte Fassungen bleiben zusätzlich zu den letzten 50 automatischen Sicherungen gespeichert.</p></div>
+      <figure class="product-shot"><img src="/assets/screenshots/versions-light.png?v=0.3.0" width="1360" height="900" loading="lazy" alt="Ansicht zum Benennen und Öffnen von Dokumentfassungen" data-alt="versionsAlt"><figcaption data-copy="versionsCaption">Arbeitsstände festhalten, bevor du etwas Größeres veränderst.</figcaption></figure>
+    </section>
+    <section class="files-section" id="files" aria-labelledby="files-title">
+      <div class="section-shell files-layout"><div><p class="eyebrow" data-copy="filesKicker">Deine Dateien auf deinem Mac</p><h2 id="files-title" data-copy="filesTitle">Fertig geschrieben.<br>Bereit zum Weitergeben.</h2><p data-copy="filesText">Markdown bleibt eine normale Textdatei, die du in anderen Apps öffnen kannst. Für die Weitergabe kopierst du Markdown oder formatierten Text, exportierst ein PDF oder druckst dein Dokument.</p></div>
+      <dl class="file-details"><div><dt data-copy="localTitle">Lokal arbeiten</dt><dd data-copy="localText">Bestehende Dateien bleiben an ihrem Ort. Schreiben und lokale Notizen brauchen weder Konto noch Internet.</dd></div><div><dt data-copy="draftTitle">Sofort anfangen</dt><dd data-copy="draftText">Neue Dokumente werden als lokale Entwürfe gesichert. Name und Ordner wählst du später im Mac-Sichern-Dialog.</dd></div><div><dt data-copy="findTitle">Wiederfinden</dt><dd data-copy="findText">Zuletzt, Entwürfe, Favoriten und Orte halten deine Dokumente griffbereit.</dd></div></dl></div>
+    </section>
+    <section class="faq section-shell" id="questions" aria-labelledby="questions-title">
+      <div><p class="eyebrow" data-copy="faqKicker">Vor dem Download</p><h2 id="questions-title" data-copy="faqTitle">Was du wissen möchtest.</h2></div>
+      <div class="faq-list">
+        <details><summary data-copy="faq1">Muss ich Markdown können?</summary><p data-copy="faq1Text">Du kannst Überschriften, Listen und andere Formatierungen im visuellen Editor bearbeiten. Für besondere Markdown-Strukturen gibt es eine Quelltextansicht. Nicht unterstützte Inhalte öffnet die App dort, damit sie erhalten bleiben.</p></details>
+        <details><summary data-copy="faq2">Brauche ich einen AI-Zugang?</summary><p data-copy="faq2Text">Für Schreiben, lokale Kommentare und Fassungen nicht. Online-Vorschläge nutzen deinen vorhandenen, angemeldeten lokalen Codex-Zugang. Erst eine bewusste Anfrage überträgt den Text; bei einer Passagenanfrage ist es der ausgewählte Ausschnitt samt Gesprächsverlauf.</p></details>
+        <details><summary data-copy="faq3">Was passiert mit Kommentaren, wenn ich eine Datei teile?</summary><p data-copy="faq3Text">Notizen, Gespräche und Fassungen liegen im lokalen App-Datenordner. Die Markdown-Datei enthält nur deinen Text. Beim Weitergeben einer Datei oder Erstellen einer Dokumentkopie werden Gespräche nicht automatisch mitgegeben.</p></details>
+        <details><summary data-copy="faq4">Auf welchen Macs läuft die Beta?</summary><p data-copy="faq4Text">Markdown Magic 0.3.0 ist für Apple Silicon und macOS 13 oder neuer verfügbar. Die Beta ist ad hoc signiert und noch nicht von Apple notarisiert. Updates installierst du derzeit manuell.</p></details>
+      </div>
+    </section>
+    <section class="download-section" id="download" aria-labelledby="download-title"><div class="section-shell download-layout">
+      <div><p class="eyebrow" data-copy="downloadKicker">Markdown Magic für Mac</p><h2 id="download-title" data-copy="downloadTitle">Dein nächster Text<br>kann hier anfangen.</h2><a class="button primary" href="https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg" data-copy="download">Für Mac herunterladen</a><p class="compatibility" data-copy="compatibility">v0.3.0 Beta · Apple Silicon · macOS 13+</p><a class="text-link" href="https://github.com/MediaPublishing/markdown-magic/releases/tag/v0.3.0" data-copy="releaseNotes">Versionshinweise</a></div>
+      <div class="installation"><h3 data-copy="installTitle">In drei Schritten startklar.</h3><ol><li data-copy="install1">DMG herunterladen und öffnen.</li><li data-copy="install2">Markdown Magic in „Programme“ ziehen.</li><li data-copy="install3">Falls macOS die Beta blockiert: unter Datenschutz & Sicherheit prüfen und „Dennoch öffnen“ bestätigen.</li></ol><a class="text-link" href="https://support.apple.com/102445" data-copy="appleHelp">Apples Hinweise zum ersten Start</a></div>
+    </div></section>
+  </main>
+  <footer class="section-shell"><a class="brand" href="#top"><img src="/assets/markdown-magic-mark.png" width="28" height="28" alt=""><span>Markdown Magic</span></a><p data-copy="footer">Visuell schreiben. Als Markdown weiterarbeiten.</p><a href="https://github.com/MediaPublishing/markdown-magic" data-copy="source">Quellcode auf GitHub</a></footer>
+  <noscript><p class="no-script">Ohne JavaScript wird diese Seite auf Deutsch angezeigt. / Without JavaScript, this page is displayed in German.</p></noscript>
+  <script src="/app.js"></script>
+</body>
 </html>
