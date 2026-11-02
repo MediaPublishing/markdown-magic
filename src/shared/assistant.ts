@@ -7,6 +7,7 @@ export type AssistantProviderStatus = {
   kind: AssistantProvider | 'offline';
   connected: boolean;
   installed?: boolean;
+  enabled?: boolean;
   label: string;
   detail: string;
 };

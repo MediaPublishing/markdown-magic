@@ -1,9 +1,10 @@
-import type { AssistantChatMessage } from './assistant';
+import type { AssistantChatMessage, AssistantProposal, AssistantProvider } from './assistant';
 import { mapUnchangedRange } from './text-diff';
 
 export type TextAnchor = { from: number; to: number; quote: string; prefix: string; suffix: string; status: 'attached' | 'changed' | 'missing' };
-export type Conversation = { id: string; title: string; createdAt: string; resolved: boolean; anchor?: TextAnchor; messages: AssistantChatMessage[] };
-export type Conversations = { version: 1; contentHash?: string; threads: Conversation[] };
+export type ConversationProposal = { proposal: AssistantProposal; base: string; anchor?: TextAnchor };
+export type Conversation = { id: string; title: string; createdAt: string; resolved: boolean; anchor?: TextAnchor; messages: AssistantChatMessage[]; pending?: ConversationProposal; request?: { provider: AssistantProvider; startedAt: string; status: 'running' | 'interrupted' } };
+export type Conversations = { version: 1; contentHash?: string; selectedThreadId?: string; threads: Conversation[] };
 export function anchorAt(content: string, from: number, to: number): TextAnchor {
   return { from, to, quote: content.slice(from, to), prefix: content.slice(Math.max(0, from - 48), from), suffix: content.slice(to, to + 48), status: 'attached' };
 }
@@ -53,6 +54,13 @@ export function validateConversations(value: unknown): Conversations {
     for (const m of thread.messages) if (!['user', 'assistant'].includes(m?.role) || typeof m.text !== 'string' || m.text.length > 20_000 || (m.provider !== undefined && !['chatgpt', 'claude', 'local'].includes(m.provider))) throw new Error('Ungültige Nachricht.');
     const a = thread.anchor;
     if (a && (!Number.isSafeInteger(a.from) || !Number.isSafeInteger(a.to) || a.from < 0 || a.to < a.from || !['attached', 'changed', 'missing'].includes(a.status) || [a.quote, a.prefix, a.suffix].some(v => typeof v !== 'string') || a.quote.length > 350_000 || a.prefix.length > 48 || a.suffix.length > 48)) throw new Error('Ungültiger Textbezug.');
+    if (thread.pending) {
+      const { proposal: p, base, anchor } = thread.pending;
+      if (!p || typeof base !== 'string' || base.length > 350_000 || typeof p.markdown !== 'string' || p.markdown.length > 350_000 || typeof p.summary !== 'string' || p.summary.length > 4000 || typeof p.id !== 'string' || typeof p.createdAt !== 'string' || typeof p.baseContentHash !== 'string' || !['summary', 'normalize', 'table-of-contents', 'custom'].includes(p.mode) || !['de', 'en'].includes(p.language) || !['claude', 'chatgpt', 'local'].includes(p.provider)) throw new Error('Ungültiger gespeicherter Vorschlag.');
+      if (anchor && (!a || anchor.quote !== base || !Number.isSafeInteger(anchor.from) || !Number.isSafeInteger(anchor.to) || anchor.from < 0 || anchor.to < anchor.from || typeof anchor.prefix !== 'string' || typeof anchor.suffix !== 'string')) throw new Error('Ungültiger Vorschlagsbereich.');
+    }
+    if (thread.request && (!['claude', 'chatgpt', 'local'].includes(thread.request.provider) || typeof thread.request.startedAt !== 'string' || !['running', 'interrupted'].includes(thread.request.status))) throw new Error('Ungültiger Auftrag.');
   }
+  if (data.selectedThreadId !== undefined && typeof data.selectedThreadId !== 'string') throw new Error('Ungültige Gesprächsauswahl.');
   return JSON.parse(JSON.stringify(data)) as Conversations;
 }

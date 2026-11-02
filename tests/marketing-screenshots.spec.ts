@@ -20,10 +20,10 @@ test('captures current public product and compact-window screenshots using only 
   await fs.writeFile(guidePath, '# A guide to clear writing\n\n## Begin with one thought\n\nGive each section one purpose. A helpful heading tells your reader what comes next.\n\n## Leave room to breathe\n\nShort paragraphs are easier to follow. Read your writing aloud and notice where you need a pause.\n\n### A small checklist\n\n- Is the opening clear?\n- Does every section earn its place?\n- Can a shorter sentence do the same work?\n\n## Review the whole document\n\nUse page preview to see the shape of a longer piece. Return to the editor whenever a passage needs another look.\n\n' + Array.from({ length: 15 }, (_, i) => `### Note ${i + 1}\n\nGood writing gives the reader enough detail to understand, then lets the point stand. Keep what helps. Refine what gets in the way.\n`).join('\n'));
   await fs.writeFile(path.join(data, 'workspace-state.json'), JSON.stringify({ version: 2, rootPath: docs, groups: [], tabs: [draft, guide], activeTabId: draft.id }));
   await fs.writeFile(path.join(data, 'trusted-roots.json'), JSON.stringify([docs, path.join(data, 'drafts')]));
-  const app = await _electron.launch({ args: ['.'], cwd: process.cwd(), env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: data, MARKDOWN_MAGIC_HOME_DIR: testRoot } });
+  const app = await _electron.launch({ ...(process.env.MARKDOWN_MAGIC_E2E_EXECUTABLE ? { executablePath: process.env.MARKDOWN_MAGIC_E2E_EXECUTABLE, args: [] } : { args: ['.'] }), cwd: process.cwd(), env: { ...process.env, MARKDOWN_MAGIC_USER_DATA_DIR: data, MARKDOWN_MAGIC_HOME_DIR: testRoot, MARKDOWN_MAGIC_ASSISTANT_MODE: 'local' } });
   try {
     const page = await app.firstWindow();
-    await page.evaluate(() => { localStorage.setItem('markdown-magic:locale', 'en'); localStorage.setItem('markdown-magic:theme', 'light'); });
+    await page.evaluate(() => { localStorage.setItem('markdown-magic:locale', 'en'); localStorage.setItem('markdown-magic:theme', 'light'); localStorage.setItem('markdown-magic:assistant-provider', 'local'); });
     await page.reload();
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1360, 900));
     await expect(page.locator('.ProseMirror:visible h1')).toContainText('A little room');
@@ -35,18 +35,18 @@ test('captures current public product and compact-window screenshots using only 
     await expect(page.locator('.document-menu')).toHaveCount(0);
     await page.locator('[data-library-view="drafts"]').click();
     await page.screenshot({ path: 'docs/screenshots/workspace-light.png' });
-    await page.locator('.ProseMirror:visible p').first().evaluate((element) => {
-      const range = document.createRange(); range.selectNodeContents(element);
-      const selection = window.getSelection()!; (element.closest('.ProseMirror') as HTMLElement).focus();
-      selection.removeAllRanges(); selection.addRange(range); document.dispatchEvent(new Event('selectionchange'));
-    });
-    await page.waitForTimeout(100);
-    await page.keyboard.press('Meta+Shift+K');
+    await page.locator('.ProseMirror:visible p').first().click({ clickCount: 3 });
+    await page.locator('[data-toolbar-item="discuss-selection"]').click();
     await expect(page.locator('.passage-context')).toBeVisible();
     await page.locator('#assistant-prompt').fill('A concrete example would help the reader here.');
     await page.locator('[data-action="assistant-note"]').click();
     await expect(page.locator('.chat-message.user')).toContainText('concrete example');
-    await page.locator('#assistant-prompt').focus();
+    await page.locator('.ProseMirror:visible p').first().evaluate((element) => {
+      (element.closest('.ProseMirror') as HTMLElement).focus();
+      const range = document.createRange(); range.selectNodeContents(element);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range); document.dispatchEvent(new Event('selectionchange'));
+    });
+    await expect(page.locator('[data-toolbar-item="discuss-selection"]')).toBeVisible();
     await page.screenshot({ path: 'docs/screenshots/review-light.png' });
     await page.locator('.assistant-header [data-action="toggle-assistant"]').click();
     await page.locator('.document-title').click(); await page.locator('[data-document-action="history"]').click();

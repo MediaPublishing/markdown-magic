@@ -42,6 +42,7 @@ const bridge: MarkdownMagicBridge = {
   revealApp: () => ipcRenderer.invoke('app:reveal'),
   getAssistantStatus: (forceRefresh = false, provider = 'chatgpt') => ipcRenderer.invoke('assistant:status', forceRefresh, provider),
   setupAssistant: (provider) => ipcRenderer.invoke('assistant:setup', provider),
+  setAssistantConnection: (provider, enabled) => ipcRenderer.invoke('assistant:connection', provider, enabled),
   proposeAssistant: (prompt, markdown, documentTitle, history = [], scope, provider = 'local') => ipcRenderer.invoke('assistant:propose', prompt, markdown, documentTitle, history, scope, provider),
   readConversations: (path) => ipcRenderer.invoke('conversations:read', path),
   writeConversations: (path, data) => ipcRenderer.invoke('conversations:write', path, data),

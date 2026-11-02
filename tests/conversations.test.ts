@@ -57,7 +57,8 @@ it('persists conversations, relocates them and does not inherit them for arbitra
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mm-conversations-'));
   try {
     const store = new ConversationStore(dir);
-    const data = { version: 1 as const, threads: [{ id: 'thread', title: 'Ein Beispiel ergänzen', resolved: false, createdAt: new Date().toISOString(), anchor: anchorAt('Grüße 😀', 0, 8), messages: [{ role: 'user' as const, text: 'Nur lokal.' }] }] };
+    const anchor = anchorAt('Grüße 😀', 0, 8);
+    const data = { version: 1 as const, selectedThreadId: 'thread', threads: [{ id: 'thread', title: 'Ein Beispiel ergänzen', resolved: false, createdAt: new Date().toISOString(), anchor, messages: [{ role: 'user' as const, text: 'Nur lokal.' }], pending: { base: anchor.quote, anchor, proposal: { id: 'proposal', mode: 'custom' as const, language: 'de' as const, provider: 'claude' as const, createdAt: new Date().toISOString(), baseContentHash: 'hash', summary: 'Kürzer', markdown: 'Hallo 😀' } } }] };
     await store.write('/tmp/first.md', data);
     expect(await new ConversationStore(dir).read('/tmp/first.md')).toEqual(data);
     await store.relocate('/tmp/first.md', '/tmp/moved.md');

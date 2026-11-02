@@ -29,6 +29,87 @@ async function selectText(page: Page, text: string, last = false) {
 }
 async function history(page: Page) { await page.locator('.document-title').click(); await page.locator('[data-document-action="history"]').click(); }
 
+test('mouse selection goes directly to the assistant without a keyboard shortcut', async () => {
+  const f = await setup('---\ntopic: test\n---\n\n# Artikel\n\nDie **AInauten** erklären AI für dich 😀.\n\nDieser Absatz bleibt.\n');
+  try {
+    await f.app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('assistant:propose'); ipcMain.handle('assistant:propose', (_e, _p, markdown, _t, _h, scope) => ({ ok: true, reply: `${scope}: ${markdown}`, proposal: { id: 'mouse', mode: 'custom', language: 'de', summary: 'Kürzer', markdown: '**AI** verständlich.', baseContentHash: '', createdAt: new Date().toISOString(), provider: 'local' } })); });
+    await f.page.getByTestId('assistant-toggle').click();
+    await selectText(f.page, 'erklären AI für dich 😀.');
+    await f.page.locator('#assistant-prompt').click(); await f.page.locator('#assistant-prompt').fill('Kürzen'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.chat-message.assistant').first()).toContainText('passage: erklären AI für dich 😀.');
+    await f.page.locator('[data-action="assistant-apply"]').click();
+    await expect(f.page.locator('.ProseMirror:visible')).toContainText('Dieser Absatz bleibt.');
+    await expect(f.page.locator('.ProseMirror:visible')).toContainText('Die AInauten AI verständlich.');
+    await f.page.locator('[data-action="assistant-undo"]').click();
+    await f.page.locator('.ProseMirror:visible p').filter({ hasText: 'Die AInauten' }).click({ clickCount: 3 });
+    await f.page.screenshot({ path: 'receipts/selection-chatbot-0.4.1.png' });
+    await f.page.locator('[data-testid="assistant-selection-icon"]').click();
+    await expect(f.page.locator('.passage-context blockquote').last()).toContainText('erklären AI für dich 😀.');
+  } finally { await f.app.close(); }
+});
+
+test('generated proposals survive conversation changes, closing a document and restart', async () => {
+  const f = await setup(); let app = f.app;
+  try {
+    await app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('assistant:propose'); ipcMain.handle('assistant:propose', async (_e, prompt, markdown) => { await new Promise(r => setTimeout(r, 500)); return { ok: true, reply: 'Fertig.', proposal: { id: prompt, mode: 'custom', language: 'de', summary: 'Dauerhafter Vorschlag', markdown: markdown.replace('Erster', 'Kurzer'), baseContentHash: '', createdAt: new Date().toISOString(), provider: 'local' } }; }); });
+    await f.page.getByTestId('assistant-toggle').click(); await f.page.locator('#assistant-prompt').fill('Dauerhaft kürzen'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.pending')).toBeVisible();
+    await f.page.locator('[data-review-new]').click();
+    await expect(f.page.getByTestId('assistant-run')).toBeEnabled();
+    await f.page.locator('#conversation-select').selectOption({ label: 'Dauerhaft kürzen' });
+    await expect(f.page.locator('.proposal')).toContainText('Dauerhafter Vorschlag');
+    await f.page.locator('#assistant-prompt').fill('Im Hintergrund kürzen'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.pending')).toBeVisible();
+    await f.page.keyboard.press('Meta+w'); await expect(f.page.locator('.empty-state')).toBeVisible();
+    await expect.poll(async () => {
+      const data = await f.page.evaluate(file => window.markdownMagic.readConversations(file), f.file);
+      const thread = data.data?.threads.find(thread => thread.pending?.proposal.id === 'Im Hintergrund kürzen');
+      return Boolean(thread && !thread.request);
+    }).toBe(true);
+    await f.page.keyboard.press('Meta+Shift+t'); await expect(f.page.locator('.ProseMirror:visible')).toBeVisible();
+    await expect(f.page.locator('.proposal')).toContainText('Dauerhafter Vorschlag');
+    await app.close(); app = await f.launch(); const page = await app.firstWindow();
+    await expect(page.locator('.ProseMirror:visible')).toBeVisible(); await page.getByTestId('assistant-toggle').click();
+    await expect(page.locator('.proposal')).toContainText('Dauerhafter Vorschlag');
+    await page.locator('[data-action="assistant-apply"]').click(); await expect(page.locator('.ProseMirror:visible')).toContainText('Kurzer Absatz.');
+  } finally { await app.close(); }
+});
+
+test('settings disconnect providers locally, persist the choice and block new requests', async () => {
+  const f = await setup(); let app = f.app;
+  try {
+    await f.page.keyboard.press('Meta+,');
+    const row = f.page.locator('[data-connection-provider="claude"]');
+    await expect(row).toBeVisible(); await row.locator('[data-connection-toggle]').click();
+    await expect(f.page.locator('[data-connection-provider="claude"]')).toContainText('Getrennt');
+    const response = await f.page.evaluate(() => window.markdownMagic.proposeAssistant('Test', 'Text', 'Titel', [], undefined, 'claude'));
+    expect(response.ok).toBe(false); expect(response.error).toContain('getrennt');
+    await app.close(); app = await f.launch(); const page = await app.firstWindow();
+    await expect(page.locator('.ProseMirror:visible')).toBeVisible(); await page.keyboard.press('Meta+,');
+    await expect(page.locator('[data-connection-provider="claude"]')).toContainText('Getrennt');
+    await page.locator('[data-connection-provider="claude"] [data-connection-toggle]').click();
+    await expect(page.locator('[data-connection-provider="claude"] [data-connection-toggle]')).toHaveText('Trennen');
+  } finally { await app.close(); }
+});
+
+test('moving onto a document retains both sets of conversations after the next write', async () => {
+  const f = await setup();
+  try {
+    const destination = path.join(f.root, 'Destination.md'); await fs.writeFile(destination, '# Ziel\n');
+    await f.page.evaluate(async (file) => {
+      await window.markdownMagic.writeConversations(file, { version: 1, threads: [{ id: 'existing-target', title: 'Vorhandene Zielnotiz', createdAt: new Date().toISOString(), resolved: false, messages: [{ role: 'user', text: 'Erhalten.' }] }] });
+    }, destination);
+    await f.page.getByTestId('assistant-toggle').click(); await f.page.locator('#assistant-prompt').fill('Ursprüngliche Notiz'); await f.page.locator('[data-action="assistant-note"]').click();
+    await f.app.evaluate(({ dialog }, file) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: file }); }, destination);
+    await f.page.locator('.document-title').click(); await f.page.locator('[data-document-action="move-document"]').click();
+    await expect(f.page.locator('.document-title')).toContainText('Destination.md');
+    await f.page.locator('#assistant-prompt').fill('Neue Notiz'); await f.page.locator('[data-action="assistant-note"]').click();
+    await expect(f.page.locator('#conversation-select option')).toContainText(['Neues Gespräch', 'Vorhandene Zielnotiz', 'Zum Dokument']);
+    const stored = await f.page.evaluate((file) => window.markdownMagic.readConversations(file), destination);
+    expect(stored.data?.threads.map(t => t.id)).toContain('existing-target'); expect(stored.data?.threads).toHaveLength(2);
+  } finally { await f.app.close(); }
+});
+
 test('chooses subscription providers, persists the choice and preserves preview, attribution and undo', async () => {
   const f = await setup();
   try {

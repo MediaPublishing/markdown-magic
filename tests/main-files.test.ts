@@ -248,6 +248,7 @@ describe('Preload bridge', () => {
       'createSampleProject',
       'getAssistantStatus',
       'setupAssistant',
+      'setAssistantConnection',
       'getState',
       'listHistory',
       'listMarkdown',
@@ -288,6 +289,8 @@ describe('Preload bridge', () => {
     expect(electron.invoke).toHaveBeenCalledWith('assistant:status', true, 'claude');
     bridge.setupAssistant('claude');
     expect(electron.invoke).toHaveBeenCalledWith('assistant:setup', 'claude');
+    bridge.setAssistantConnection('claude', false);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:connection', 'claude', false);
     bridge.recordAssistantCheckpoint('/workspace/draft.md', '# Draft', 123);
     expect(electron.invoke).toHaveBeenCalledWith('history:record-assistant', '/workspace/draft.md', '# Draft', 123);
     const onMenuAction = vi.fn();

@@ -10,6 +10,7 @@ import { shouldUseSourceEditor } from './editor-content';
 import { findDocumentTextMatches, replaceDocumentTextMatches } from './editor-operations';
 import { resolveDocumentImageUrl, resolveLocalImageSources } from './local-media';
 import { createSourceEditor } from './source-editor';
+import botIcon from 'lucide-static/icons/bot.svg?raw';
 
 function editorLabel(): string {
   return document.documentElement.lang.toLowerCase().startsWith('en') ? 'Document' : 'Dokument';
@@ -33,6 +34,14 @@ export const createVisualMilkdownEditor: DocumentEditorFactory = async (root, in
       [Crepe.Feature.TopBar]: true,
     },
     featureConfigs: {
+      [Crepe.Feature.Toolbar]: {
+        buildToolbar: (builder) => builder.addGroup('assistant', 'Assistant').addItem('discuss-selection', {
+          icon: `<span data-testid="assistant-selection-icon">${botIcon}</span>`,
+          label: document.documentElement.lang === 'en' ? 'Edit selection with assistant' : 'Auswahl mit Assistenten bearbeiten',
+          active: () => false,
+          onRun: () => { editorRoot.dispatchEvent(new CustomEvent('assistant-discuss-selection', { bubbles: true })); },
+        }),
+      },
       [Crepe.Feature.ImageBlock]: {
         proxyDomURL: (source) => resolveDocumentImageUrl(source, documentPath) ?? source,
       },

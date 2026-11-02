@@ -222,7 +222,7 @@ function readStoredPaths(key: string): string[] {
 type AssistantUndo = { checkpointId: string; applied: string };
 type PendingAssistantProposal = { proposal: AssistantProposal; base: string; anchor?: TextAnchor; threadId?: string };
 const assistantUndoByPath = new Map<string, AssistantUndo>();
-const assistantProposalsByPath = new Map<string, PendingAssistantProposal>();
+let capturedSelection: { tabId: string; anchor: TextAnchor } | undefined;
 const assistantUndoStorageKey = 'markdown-magic:assistant-undo';
 let assistantOpen = false;
 let assistantBusyPath: string | null = null;
@@ -814,7 +814,7 @@ function cleanupWorkspace(): void {
   rootAbortController?.abort();
   rootAbortController = undefined;
   destroyEditor();
-  assistantProposalsByPath.clear();
+  capturedSelection = undefined;
   conversationsByPath.clear(); conversationLoads.clear(); conversationWrites.clear(); selectedConversation.clear(); conversationErrors.clear();
   assistantBusyPath = null;
   assistantReturnFocus = null;
@@ -829,6 +829,9 @@ function cleanupWorkspace(): void {
 function bindEvents(root: HTMLElement): void {
   rootAbortController = new AbortController();
   const listenerOptions = { signal: rootAbortController.signal };
+  document.addEventListener('selectionchange', () => { requestAnimationFrame(captureEditorSelection); }, listenerOptions);
+  root.addEventListener('pointerdown', captureEditorSelection, { ...listenerOptions, capture: true });
+  root.addEventListener('assistant-discuss-selection', () => { void discussSelection(); }, listenerOptions);
   elements?.fileSearch.addEventListener('input', () => {
     renderFileList();
     queueFileIndex();
@@ -1575,7 +1578,6 @@ async function closeDocument(tabId: string): Promise<void> {
   if (!await prepareTabsForClose([closingTab])) return;
   rememberClosedTabs([closingTab]);
   conflictedPaths.delete(closingTab.path);
-  assistantProposalsByPath.delete(closingTab.path);
   state = closeTab(state, tabId);
   await persistState();
   resolveStatus();
@@ -1693,7 +1695,6 @@ async function closeOtherTabs(tabId: string): Promise<void> {
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
     assistantUndoByPath.delete(tab.path);
-    assistantProposalsByPath.delete(tab.path);
   }
   state = { ...state, tabs: [keepTab], activeTabId: keepTab.id };
   await persistState();
@@ -1714,7 +1715,6 @@ async function closeOtherTabsInGroup(tabId: string): Promise<void> {
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
     assistantUndoByPath.delete(tab.path);
-    assistantProposalsByPath.delete(tab.path);
   }
   const keptIds = new Set([keepTab.id]);
   state = { ...state, tabs: state.tabs.filter((tab) => keptIds.has(tab.id) || tab.groupId !== keepTab.groupId), activeTabId: keepTab.id };
@@ -1734,7 +1734,6 @@ async function closeGroupTabs(groupId: string): Promise<void> {
   for (const tab of closingTabs) {
     conflictedPaths.delete(tab.path);
     assistantUndoByPath.delete(tab.path);
-    assistantProposalsByPath.delete(tab.path);
   }
   state = closeTab(state, closingTabs[0]!.id);
   for (const tab of closingTabs.slice(1)) state = closeTab(state, tab.id);
@@ -1928,6 +1927,10 @@ function queueRecovery(session: DocumentSession): Promise<boolean> {
 
 function handleSessionChange(session: DocumentSession, markdown: string): void {
   if (session.suppress || markdown === session.content) return;
+  if (capturedSelection?.tabId === session.id) {
+    const moved = moveAnchor(session.content, markdown, capturedSelection.anchor);
+    capturedSelection = moved.status === 'attached' ? { tabId: session.id, anchor: moved } : undefined;
+  }
   for (const thread of conversationsByPath.get(session.path)?.threads ?? []) if (thread.anchor) thread.anchor = moveAnchor(session.content, markdown, thread.anchor);
   session.content = markdown;
   if (conversationsByPath.get(session.path)?.threads.length) void saveConversations(session.path);
@@ -1989,6 +1992,33 @@ const conversationWrites = new Map<string, Promise<boolean>>();
 const selectedConversation = new Map<string, string>();
 const conversationErrors = new Set<string>();
 function activeConversation(path: string): Conversation | undefined { return conversationsByPath.get(path)?.threads.find(t => t.id === selectedConversation.get(path)); }
+function pendingAssistantProposal(path: string): PendingAssistantProposal | undefined {
+  const thread = activeConversation(path);
+  return thread?.pending ? { ...thread.pending, threadId: thread.id } : undefined;
+}
+function discardAssistantProposal(path: string): void {
+  const thread = activeConversation(path);
+  if (thread) { delete thread.pending; void saveConversations(path); }
+}
+function captureEditorSelection(): void {
+  if (!elements?.editorHost.contains(document.activeElement)) return;
+  const tabId = state.activeTabId;
+  const anchor = activeEditor?.getSelection?.();
+  const previous = capturedSelection?.anchor;
+  capturedSelection = tabId && anchor ? { tabId, anchor } : undefined;
+  if (assistantOpen && (previous?.from !== anchor?.from || previous?.to !== anchor?.to || previous?.quote !== anchor?.quote)) renderAssistant();
+}
+function selectedEditorPassage(): TextAnchor | undefined {
+  const tab = state.tabs.find(t => t.id === state.activeTabId);
+  const anchor = capturedSelection?.tabId === tab?.id ? capturedSelection?.anchor : undefined;
+  const content = activeEditor?.getMarkdown();
+  return anchor && content?.slice(anchor.from, anchor.to) === anchor.quote ? anchor : undefined;
+}
+function conversationForSelection(path: string, anchor?: TextAnchor): Conversation {
+  const thread = activeConversation(path);
+  if (anchor && (!thread?.anchor || thread.anchor.from !== anchor.from || thread.anchor.quote !== anchor.quote)) return newConversation(path, anchor);
+  return thread ?? newConversation(path);
+}
 async function loadConversations(path: string): Promise<void> {
   if (conversationsByPath.has(path)) return;
   if (conversationLoads.has(path)) return conversationLoads.get(path);
@@ -1999,7 +2029,8 @@ async function loadConversations(path: string): Promise<void> {
       conversationsByPath.set(path, result.data); conversationErrors.delete(path);
       const content = sessions.get(state.tabs.find(t => t.path === path)?.id ?? '')?.content ?? '';
       for (const thread of result.data.threads) if (thread.anchor && (result.data.contentHash !== contentFingerprint(content) || content.slice(thread.anchor.from, thread.anchor.to) !== thread.anchor.quote)) thread.anchor = locateAnchor(content, thread.anchor);
-      const current = result.data.threads.find(t => !t.resolved) ?? result.data.threads[0];
+      for (const thread of result.data.threads) if (thread.request?.status === 'running') thread.request.status = 'interrupted';
+      const current = result.data.threads.find(t => t.id === result.data?.selectedThreadId) ?? result.data.threads.find(t => !t.resolved) ?? result.data.threads[0];
       if (current) { selectedConversation.set(path, current.id); assistantMessagesByPath.set(path, current.messages); }
     } catch (error) { conversationErrors.add(path); setStatus(errorMessage(error, t('conversationLoadFailed')), true); }
     renderAssistant();
@@ -2009,7 +2040,9 @@ async function loadConversations(path: string): Promise<void> {
 }
 function saveConversations(path: string): Promise<boolean> {
   const data = conversationsByPath.get(path); if (!data) return Promise.resolve(!conversationErrors.has(path));
-  data.contentHash = contentFingerprint(sessions.get(state.tabs.find(t => t.path === path)?.id ?? '')?.content ?? '');
+  const content = sessions.get(state.tabs.find(t => t.path === path)?.id ?? '')?.content;
+  if (content !== undefined) data.contentHash = contentFingerprint(content);
+  data.selectedThreadId = selectedConversation.get(path);
   const snapshot = JSON.parse(JSON.stringify(data)) as Conversations;
   const write = (conversationWrites.get(path) ?? Promise.resolve(true)).then(async () => {
     try {
@@ -2023,11 +2056,12 @@ function saveConversations(path: string): Promise<boolean> {
 function newConversation(path: string, anchor?: TextAnchor): Conversation {
   const thread: Conversation = { id: crypto.randomUUID(), title: anchor ? anchor.quote.replace(/\s+/g, ' ').slice(0, 80) : t('documentConversation'), createdAt: new Date().toISOString(), resolved: false, messages: [], ...(anchor ? { anchor } : {}) };
   conversationsByPath.get(path)!.threads.unshift(thread); selectedConversation.set(path, thread.id);
-  assistantMessagesByPath.set(path, thread.messages); assistantProposalsByPath.delete(path);
+  assistantMessagesByPath.set(path, thread.messages);
+  capturedSelection = undefined;
   return thread;
 }
 async function discussSelection(): Promise<void> {
-  const tab = state.tabs.find(t => t.id === state.activeTabId); const anchor = activeEditor?.getSelection?.();
+  const tab = state.tabs.find(t => t.id === state.activeTabId); const anchor = selectedEditorPassage() ?? activeEditor?.getSelection?.();
   if (!tab || !anchor) { setStatus(t('selectPassageFirst'), true); return; }
   await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
   newConversation(tab.path, anchor); await saveConversations(tab.path);
@@ -2038,7 +2072,7 @@ async function addLocalNote(): Promise<void> {
   const tab = state.tabs.find(t => t.id === state.activeTabId); const text = elements?.assistantPrompt.value.trim();
   if (!tab || !text) return;
   await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
-  const thread = activeConversation(tab.path) ?? newConversation(tab.path);
+  const thread = conversationForSelection(tab.path, selectedEditorPassage());
   thread.messages.push({ role: 'user', text }); assistantMessagesByPath.set(tab.path, thread.messages);
   if (elements) elements.assistantPrompt.value = '';
   await saveConversations(tab.path); renderAssistant();
@@ -2055,7 +2089,7 @@ function bindConversationControls(path: string, thread?: Conversation): void {
   const body = elements?.assistantBody; if (!body) return;
   body.querySelector<HTMLSelectElement>('#conversation-select')?.addEventListener('change', (event) => {
     const id = (event.target as HTMLSelectElement).value;
-    selectedConversation.set(path, id); assistantMessagesByPath.set(path, activeConversation(path)?.messages ?? []); assistantProposalsByPath.delete(path); renderAssistant();
+    selectedConversation.set(path, id); assistantMessagesByPath.set(path, activeConversation(path)?.messages ?? []); void saveConversations(path); renderAssistant();
   });
   body.querySelector('[data-review-new]')?.addEventListener('click', () => { newConversation(path); void saveConversations(path); renderAssistant(); elements?.assistantPrompt.focus(); });
   body.querySelector('[data-review-resolve]')?.addEventListener('click', () => { if (thread) { thread.resolved = !thread.resolved; void saveConversations(path); renderAssistant(); } });
@@ -2134,6 +2168,7 @@ function assistantProviderLabel(provider: AssistantProvider): string {
 
 function assistantConnectionLabel(): string {
   if (assistantStatusChecking) return t('assistantChecking');
+  if (assistantProviderStatus.enabled === false) return t('assistantDisconnected');
   if (assistantProvider === 'local') return t('assistantOfflineNotice');
   return assistantProviderStatus.connected ? t('assistantConnected') : t('assistantNotConnected');
 }
@@ -2144,7 +2179,8 @@ function renderAssistantProvider(): string {
       ${(['chatgpt', 'claude', 'local'] as const).map((provider) => `<option value="${provider}" ${assistantProvider === provider ? 'selected' : ''}>${assistantProviderLabel(provider)}</option>`).join('')}
     </select></div>
     <div class="assistant-connection"><span role="status">${assistantConnectionLabel()}</span>${assistantProvider !== 'local' ? `<button type="button" class="ghost-action compact-action" data-assistant-check ${assistantStatusChecking ? 'disabled' : ''}>${t('assistantProviderCheck')}</button>` : ''}</div>
-    ${assistantProvider !== 'local' && !assistantStatusChecking && !assistantProviderStatus.connected ? `<div class="assistant-setup"><p>${assistantProviderStatus.installed ? t('assistantLoginHelp') : t('assistantInstallHelp')}</p><button type="button" class="ghost-action compact-action" data-assistant-setup>${assistantProviderStatus.installed ? t('assistantLogin') : t('assistantInstall')}</button><small>${t('assistantSubscriptionHelp')}</small></div>` : ''}
+    ${assistantProvider !== 'local' && !assistantStatusChecking && !assistantProviderStatus.connected ? `<div class="assistant-setup"><p>${assistantProviderStatus.enabled === false ? t('assistantDisconnectedHelp') : assistantProviderStatus.installed ? t('assistantLoginHelp') : t('assistantInstallHelp')}</p><button type="button" class="ghost-action compact-action" ${assistantProviderStatus.enabled === false ? 'data-assistant-connect' : 'data-assistant-setup'}>${assistantProviderStatus.enabled === false ? t('assistantConnect') : assistantProviderStatus.installed ? t('assistantLogin') : t('assistantInstall')}</button><small>${t('assistantSubscriptionHelp')}</small></div>` : ''}
+    <button type="button" class="assistant-manage" data-assistant-manage>${t('assistantConnections')}</button>
   </section>`;
 }
 
@@ -2152,12 +2188,12 @@ function renderAssistant(): void {
   if (!elements) return;
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   const undo = tab ? assistantUndoByPath.get(tab.path) : undefined;
-  const pendingProposal = tab ? assistantProposalsByPath.get(tab.path) : undefined;
+  const pendingProposal = tab ? pendingAssistantProposal(tab.path) : undefined;
   const assistantProposal = pendingProposal?.proposal;
   const assistantProposalBase = pendingProposal?.base ?? '';
   const thread = tab ? activeConversation(tab.path) : undefined;
   const messages = tab ? assistantMessagesByPath.get(tab.path) ?? [] : [];
-  const assistantBusy = Boolean(tab && assistantBusyPath === tab.path);
+  const assistantBusy = thread?.request?.status === 'running';
   const diff = assistantProposal ? createLineDiff(assistantProposalBase, assistantProposal.markdown) : [];
   const truncated = false;
   const rows = diff.map((row) => `
@@ -2176,6 +2212,8 @@ function renderAssistant(): void {
   providerControls.innerHTML = renderAssistantProvider();
   elements.assistantBody.innerHTML = `
     ${tab ? renderConversationControls(tab.path, thread) : ''}
+    ${selectedEditorPassage() && !thread?.anchor ? `<section class="passage-context live-selection"><small>${t('selectedPassage')}</small><blockquote>${escapeHtml(selectedEditorPassage()!.quote)}</blockquote><p>${t('selectionNextRequest')}</p></section>` : ''}
+    ${thread?.request?.status === 'interrupted' ? `<p class="assistant-message" role="status">${t('assistantInterrupted')}</p>` : ''}
     <p class="assistant-notice">${thread?.anchor && assistantProvider !== 'local' ? `${t('selectionScopeNotice')} ` : ''}${assistantProvider === 'local' ? t('assistantOfflineNotice') : t('assistantSendNotice')}</p>
     ${!tab ? `<p class="assistant-message">${t('assistantNoDocument')}</p>` : ''}
     ${tab && messages.length === 0 ? `<p class="assistant-message">${t('assistantWelcome')}</p>` : ''}
@@ -2188,7 +2226,7 @@ function renderAssistant(): void {
         <div class="diff-view">${rows || `<p class="assistant-message">${t('assistantNoChanges')}</p>`}</div>
         ${truncated ? `<p class="assistant-truncated">${t('assistantDiffTooLarge')}</p>` : ''}
         <div class="proposal-actions">
-          <button class="primary-action compact-action" type="button" data-action="assistant-apply">${t('assistantApply')}</button>
+          <button class="primary-action compact-action" type="button" data-action="assistant-apply" ${assistantBusyPath ? 'disabled' : ''}>${t('assistantApply')}</button>
           <button class="ghost-action compact-action" type="button" data-action="assistant-copy">${t('assistantCopy')}</button>
           <button class="ghost-action compact-action" type="button" data-action="assistant-discard">${t('assistantDiscard')}</button>
         </div>
@@ -2207,6 +2245,12 @@ function renderAssistant(): void {
     void refreshAssistantProviderStatus(true);
   });
   providerControls.querySelector('[data-assistant-check]')?.addEventListener('click', () => { void refreshAssistantProviderStatus(true); });
+  providerControls.querySelector('[data-assistant-manage]')?.addEventListener('click', () => { void showSettings(); });
+  providerControls.querySelector('[data-assistant-connect]')?.addEventListener('click', async () => {
+    const result = await window.markdownMagic.setAssistantConnection(assistantProvider, true);
+    if (!result.ok) { setStatus(result.error ?? t('saveFailed'), true); return; }
+    await refreshAssistantProviderStatus(true);
+  });
   providerControls.querySelector<HTMLButtonElement>('[data-assistant-setup]')?.addEventListener('click', async (event) => {
     (event.currentTarget as HTMLButtonElement).disabled = true;
     try {
@@ -2219,7 +2263,7 @@ function renderAssistant(): void {
   const latestAssistantMessage = messages.findLast((message) => message.role === 'assistant');
   elements.assistantAnnouncement.textContent = assistantBusy ? t('assistantBusy') : latestAssistantMessage?.text ?? '';
   elements.assistantPanel.setAttribute('aria-busy', String(assistantBusy));
-  elements.assistantRun.disabled = Boolean(assistantBusyPath) || !tab;
+  elements.assistantRun.disabled = Boolean(assistantBusyPath) || !tab || (assistantProvider !== 'local' && assistantProviderStatus.enabled === false);
   elements.assistantPrompt.disabled = !tab;
   elements.assistantPanel.querySelectorAll<HTMLButtonElement>('[data-assistant-command]').forEach((button) => {
     button.disabled = Boolean(assistantBusyPath) || !tab;
@@ -2236,25 +2280,28 @@ async function runAssistantProposal(prompt: string): Promise<void> {
   const request = prompt.trim();
   if (!request || assistantBusyPath) return;
   const requestProvider = assistantProvider;
-  const requestPath = tab.path;
-  await loadConversations(tab.path); if (!conversationsByPath.has(tab.path)) return;
-  const thread = activeConversation(tab.path) ?? newConversation(tab.path);
-  if (thread.anchor && thread.anchor.status !== 'attached') { setStatus(t('reselectPassage'), true); return; }
+  let requestPath = tab.path;
+  const selection = selectedEditorPassage();
+  const initialMarkdown = activeEditor.getMarkdown();
+  assistantBusyPath = requestPath;
+  await loadConversations(tab.path);
+  if (!conversationsByPath.has(tab.path)) { assistantBusyPath = null; renderAssistant(); return; }
+  const thread = conversationForSelection(tab.path, selection);
+  if (thread.anchor && thread.anchor.status !== 'attached') { assistantBusyPath = null; setStatus(t('reselectPassage'), true); renderAssistant(); return; }
   const history = [...thread.messages];
   assistantMessagesByPath.set(tab.path, [...history, { role: 'user', text: request }]);
   thread.messages = assistantMessagesByPath.get(tab.path)!;
   if (!thread.anchor && thread.messages.length === 1) thread.title = request.slice(0, 80);
-  assistantBusyPath = requestPath;
-  await saveConversations(tab.path);
+  thread.request = { provider: requestProvider, status: 'running', startedAt: new Date().toISOString() };
+  if (!await saveConversations(tab.path)) { thread.request.status = 'interrupted'; assistantBusyPath = null; renderAssistant(); return; }
   if (elements) elements.assistantPrompt.value = '';
-  assistantProposalsByPath.delete(requestPath);
   renderAssistant();
   try {
-    const documentMarkdown = sessions.get(tab.id)?.editor?.getMarkdown();
-    if (documentMarkdown === undefined) throw new Error(t('assistantNoDocument'));
+    const documentMarkdown = sessions.get(tab.id)?.editor?.getMarkdown() ?? initialMarkdown;
     const targetAnchor = thread.anchor ? { ...thread.anchor } : undefined;
     const markdown = targetAnchor ? documentMarkdown.slice(targetAnchor.from, targetAnchor.to) : documentMarkdown;
     const result = await window.markdownMagic.proposeAssistant(request, markdown, targetAnchor ? `${tab.title} · ${t('selectedPassage')}` : tab.title, history, targetAnchor ? 'passage' : undefined, requestProvider);
+    requestPath = [...conversationsByPath].find(([, data]) => data.threads.includes(thread))?.[0] ?? requestPath;
     if (!result.ok || !result.reply) {
       const error = result.error ?? t('assistantProposeFailed');
       thread.messages.push({ role: 'assistant', text: error, provider: requestProvider });
@@ -2264,8 +2311,8 @@ async function runAssistantProposal(prompt: string): Promise<void> {
     }
     thread.messages.push({ role: 'assistant', text: result.reply, provider: result.proposal?.provider ?? requestProvider });
     if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
-    if (result.proposal && selectedConversation.get(requestPath) === thread.id) {
-      assistantProposalsByPath.set(requestPath, { proposal: result.proposal, base: markdown, anchor: targetAnchor, threadId: thread.id });
+    if (result.proposal) {
+      thread.pending = { proposal: result.proposal, base: markdown, anchor: targetAnchor };
       if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(result.proposal.summary);
     }
   } catch (error) {
@@ -2274,8 +2321,10 @@ async function runAssistantProposal(prompt: string): Promise<void> {
     if (selectedConversation.get(requestPath) === thread.id) assistantMessagesByPath.set(requestPath, thread.messages);
     if (state.tabs.find((item) => item.id === state.activeTabId)?.path === requestPath) setStatus(message, true);
   } finally {
+    delete thread.request;
+    requestPath = [...conversationsByPath].find(([, data]) => data.threads.includes(thread))?.[0] ?? requestPath;
     await saveConversations(requestPath);
-    if (assistantBusyPath === requestPath) assistantBusyPath = null;
+    assistantBusyPath = null;
     renderAssistant();
   }
 }
@@ -2283,7 +2332,7 @@ async function runAssistantProposal(prompt: string): Promise<void> {
 async function applyAssistantProposal(): Promise<void> {
   const tab = state.tabs.find((item) => item.id === state.activeTabId);
   const current = activeEditor?.getMarkdown() ?? '';
-  const pendingProposal = tab ? assistantProposalsByPath.get(tab.path) : undefined;
+  const pendingProposal = tab ? pendingAssistantProposal(tab.path) : undefined;
   if (!tab || !activeEditor || activeEditorPath !== tab.path || !pendingProposal) return;
   const thread = activeConversation(tab.path);
   const target = pendingProposal.anchor && thread?.id === pendingProposal.threadId ? thread?.anchor : undefined;
@@ -2314,7 +2363,7 @@ async function applyAssistantProposal(): Promise<void> {
     suppressEditorChange = false;
   }
   state = setTabDirty(state, tab.id, true);
-  assistantProposalsByPath.delete(tab.path);
+  if (thread) { delete thread.pending; await saveConversations(tab.path); }
   persistState();
   renderTabs();
   updateHeader();
@@ -2348,7 +2397,7 @@ async function undoAssistantChange(): Promise<void> {
   }
   assistantUndoByPath.delete(tab.path);
   persistAssistantUndo();
-  assistantProposalsByPath.delete(tab.path);
+  discardAssistantProposal(tab.path);
   state = setTabDirty(state, tab.id, true);
   persistState();
   renderTabs();
@@ -3382,12 +3431,22 @@ async function saveDocumentAs(operation: 'save' | 'move' | 'duplicate'): Promise
     finally { session.suppress = false; }
   }
   await conversationWrites.get(oldPath);
-  if (conversationsByPath.has(oldPath)) { conversationsByPath.set(path, conversationsByPath.get(oldPath)!); conversationsByPath.delete(oldPath); }
+  const sourceConversations = conversationsByPath.get(oldPath);
+  if (sourceConversations) {
+    const merged = await window.markdownMagic.readConversations(path);
+    if (merged.ok && merged.data) {
+      const live = new Map([...(conversationsByPath.get(path)?.threads ?? []), ...sourceConversations.threads].map(thread => [thread.id, thread]));
+      const threads = merged.data.threads.map(thread => live.get(thread.id) ?? thread);
+      const ids = new Set(threads.map(thread => thread.id));
+      threads.push(...[...live.values()].filter(thread => !ids.has(thread.id)));
+      conversationsByPath.set(path, { ...merged.data, threads }); conversationsByPath.delete(oldPath);
+    } else { conversationErrors.add(path); setStatus(merged.error ?? t('conversationLoadFailed'), true); }
+  }
   if (selectedConversation.has(oldPath)) { selectedConversation.set(path, selectedConversation.get(oldPath)!); selectedConversation.delete(oldPath); }
   session.editor?.setDocumentPath?.(path);
   state = { ...state, tabs: state.tabs.map((item) => item.id === tab.id ? { ...item, path, title: folderName(path), draft: false, missing: false, dirty: session.revision !== revision } : item) };
   if (activeEditor === session.editor) { activeEditorPath = path; activeEditorMtimeMs = session.mtime; }
-  for (const map of [assistantUndoByPath, assistantProposalsByPath, assistantMessagesByPath] as Map<string, unknown>[]) {
+  for (const map of [assistantUndoByPath, assistantMessagesByPath] as Map<string, unknown>[]) {
     if (map.has(oldPath)) { map.set(path, map.get(oldPath)); map.delete(oldPath); }
   }
   if (pinnedNavigationPaths.delete(oldPath)) { pinnedNavigationPaths.add(path); persistPinnedNavigation(); }
@@ -3400,6 +3459,7 @@ async function saveDocumentAs(operation: 'save' | 'move' | 'duplicate'): Promise
   if (session.revision !== revision) await queueRecovery(session);
   await persistState();
   await refreshDrafts();
+  if (conversationsByPath.has(path)) await saveConversations(path);
   await loadFileTree();
   resolveStatus(); render();
 }
@@ -3576,13 +3636,13 @@ async function performAction(action: string): Promise<void> {
   if (action === 'assistant-apply') await applyAssistantProposal();
   if (action === 'assistant-undo') await undoAssistantChange();
   const activeTab = state.tabs.find((item) => item.id === state.activeTabId);
-  const activeProposal = activeTab ? assistantProposalsByPath.get(activeTab.path)?.proposal : undefined;
+  const activeProposal = activeTab ? pendingAssistantProposal(activeTab.path)?.proposal : undefined;
   if (action === 'assistant-copy' && activeProposal) {
     await navigator.clipboard.writeText(activeProposal.markdown);
     setStatus(t('assistantCopied'));
   }
   if (action === 'assistant-discard') {
-    if (activeTab) assistantProposalsByPath.delete(activeTab.path);
+    if (activeTab) discardAssistantProposal(activeTab.path);
     renderAssistant();
     setStatus(t('assistantDiscarded'));
   }
@@ -3755,7 +3815,7 @@ async function showHistory(): Promise<void> {
   });
 }
 
-function showSettings(): void {
+async function showSettings(): Promise<void> {
   document.querySelector('#settings-dialog')?.closest('.dialog-backdrop')?.remove();
   const backdrop = document.createElement('div');
   backdrop.className = 'dialog-backdrop';
@@ -3771,6 +3831,7 @@ function showSettings(): void {
     <div class="settings-list">
       <section><strong>${locale === 'de' ? 'Arbeitsbereich' : 'Workspace'}</strong><span title="${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}">${state.rootPath ? escapeHtml(state.rootPath) : 'Home'}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-folder>${t('chooseFolder')}</button></div></section>
       <section><strong>${t('assistant')}</strong><span>${assistantProviderLabel(assistantProvider)} · ${assistantConnectionLabel()}</span><div class="settings-actions"><button class="ghost-action" type="button" data-settings-assistant>${locale === 'de' ? 'Anbieter & Chat öffnen' : 'Open provider & chat'}</button><button class="ghost-action" type="button" data-settings-assistant-status>${t('assistantProviderCheck')}</button></div></section>
+      <div class="settings-connections"><h3>${t('assistantConnections')}</h3><p>${t('assistantDisconnectScope')}</p><div data-connection-list role="status">${t('loading')}</div></div>
       <section><strong>${t('language')} &amp; ${t('appearance')}</strong><span>${locale === 'de' ? 'Deutsch' : 'English'} · ${themeLabel()}</span><div class="settings-actions"><button type="button" class="ghost-action" data-settings-language>${locale === 'de' ? 'English' : 'Deutsch'}</button><button type="button" class="ghost-action" data-settings-theme>${themeLabel()}</button></div></section>
     </div>
     <div class="dialog-actions"><button type="button" class="ghost-action" data-settings-onboarding>${locale === 'de' ? 'Kurze Einführung' : 'Quick introduction'}</button><button type="button" class="primary-action" data-cancel>${t('close')}</button></div>
@@ -3784,6 +3845,41 @@ function showSettings(): void {
   dialog.querySelector('[data-settings-assistant]')?.addEventListener('click', () => { close(); toggleAssistant(); });
   dialog.querySelector('[data-settings-assistant-status]')?.addEventListener('click', () => { void refreshAssistantProviderStatus(true).then(showSettings); });
   dialog.querySelector<HTMLButtonElement>('[data-settings-folder]')?.focus();
+  const list = dialog.querySelector<HTMLElement>('[data-connection-list]')!;
+  const statuses = await Promise.all((['claude', 'chatgpt'] as const).map(async provider => {
+    try { return { provider, status: await window.markdownMagic.getAssistantStatus(true, provider) }; }
+    catch { return { provider, status: { kind: provider, connected: false, enabled: true, installed: false, label: provider, detail: '' } as AssistantProviderStatus }; }
+  }));
+  if (!dialog.isConnected) return;
+  list.removeAttribute('role');
+  function renderConnection(provider: 'claude' | 'chatgpt', status: AssistantProviderStatus): string {
+    return `<section class="settings-connection" data-connection-provider="${provider}"><div><strong>${assistantProviderLabel(provider)}</strong><span role="status">${status.enabled === false ? t('assistantDisconnected') : status.connected ? t('assistantConnected') : t('assistantNotConnected')}</span></div><div class="settings-actions"><button type="button" class="ghost-action" data-connection-toggle>${t(status.enabled === false ? 'assistantConnect' : 'assistantDisconnect')}</button><button type="button" class="ghost-action" data-connection-login>${t(status.installed ? 'assistantLogin' : 'assistantInstall')}</button><button type="button" class="ghost-action" data-connection-check>${t('assistantProviderCheck')}</button></div></section>`;
+  }
+  list.innerHTML = statuses.map(({ provider, status }) => renderConnection(provider, status)).join('');
+  for (const item of statuses) {
+    const row = list.querySelector<HTMLElement>(`[data-connection-provider="${item.provider}"]`)!;
+    const bindRow = (): void => {
+      row.querySelector('[data-connection-toggle]')?.addEventListener('click', async () => {
+        row.querySelectorAll<HTMLButtonElement>('button').forEach(button => { button.disabled = true; });
+        const result = await window.markdownMagic.setAssistantConnection(item.provider, item.status.enabled === false);
+        if (!result.ok) setStatus(result.error ?? t('saveFailed'), true);
+        await updateRow();
+      });
+      row.querySelector('[data-connection-login]')?.addEventListener('click', async () => {
+        const result = await window.markdownMagic.setupAssistant(item.provider);
+        setStatus(result.ok ? t('assistantSetupOpened') : result.error ?? t('assistantProposeFailed'), !result.ok);
+      });
+      row.querySelector('[data-connection-check]')?.addEventListener('click', () => { void updateRow(); });
+    };
+    const updateRow = async (): Promise<void> => {
+      item.status = await window.markdownMagic.getAssistantStatus(true, item.provider);
+      if (item.provider === assistantProvider) { assistantProviderStatus = item.status; if (assistantOpen) renderAssistant(); }
+      if (!row.isConnected) return;
+      const template = document.createElement('template'); template.innerHTML = renderConnection(item.provider, item.status);
+      row.innerHTML = template.content.firstElementChild!.innerHTML; bindRow();
+    };
+    bindRow();
+  }
 }
 
 function showShortcuts(): void {

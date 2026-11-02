@@ -315,6 +315,19 @@ body.is-pointer-dragging { cursor: grabbing; user-select: none; }
 .assistant-body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 2px 3px 8px 0; }
 .assistant-notice { margin: 0 0 9px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .assistant-provider-controls { flex:0 0 auto; }
+.assistant-manage { margin-top:8px; padding:2px 0; border:0; background:none; color:var(--link); font:inherit; font-size:11px; cursor:pointer; }
+.settings-connections { margin:10px 0; padding:12px 0; border-block:1px solid var(--line); }
+.settings-connections h3 { margin:0 0 6px; font-size:14px; }
+.settings-connections p { margin:0 0 10px; font-size:12px; line-height:1.5; color:var(--muted); }
+.settings-connection { display:block !important; margin-block:12px; }
+.settings-connection > div:first-child { display:flex; justify-content:space-between; gap:12px; margin-bottom:6px; }
+.settings-connection span { font-size:12px; color:var(--muted); }
+.settings-connection .settings-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.live-selection blockquote { max-height:90px; overflow:auto; }
+.milkdown-toolbar [data-toolbar-item="discuss-selection"] { color:var(--link); }
+.milkdown-toolbar [data-toolbar-item="discuss-selection"] svg,
+.milkdown-toolbar [data-toolbar-item="discuss-selection"] svg * { fill:none !important; }
+.milkdown-toolbar [data-toolbar-item="discuss-selection"] svg { display:block; width:18px; height:18px; stroke:var(--link) !important; }
 .assistant-provider { margin:0 0 14px; padding-bottom:12px; border-bottom:1px solid var(--line); background:var(--panel); font-size:12px; }
 .assistant-provider-row, .assistant-connection { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .assistant-provider-row label { font-weight:600; }

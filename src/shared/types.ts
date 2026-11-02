@@ -124,6 +124,7 @@ export type MarkdownMagicBridge = {
   revealApp(): Promise<OperationResult>;
   getAssistantStatus(forceRefresh?: boolean, provider?: AssistantProvider): Promise<AssistantProviderStatus>;
   setupAssistant(provider: AssistantProvider): Promise<OperationResult>;
+  setAssistantConnection(provider: AssistantProvider, enabled: boolean): Promise<OperationResult>;
   proposeAssistant(prompt: string, markdown: string, documentTitle: string, history?: AssistantChatMessage[], scope?: 'passage', provider?: AssistantProvider): Promise<OperationResult & Partial<AssistantChatResponse>>;
   readConversations(path: string): Promise<OperationResult & { data?: Conversations }>;
   writeConversations(path: string, data: Conversations): Promise<OperationResult>;

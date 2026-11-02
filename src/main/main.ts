@@ -15,6 +15,7 @@ import type { RecoveryStore } from './recovery-store';
 import type { AssistantChatMessage } from '../shared/assistant';
 import { getAssistantStatus, proposeAssistant, requireAssistantProvider } from './assistant-service';
 import { resolveAssistantBinary } from './assistant-binary';
+import { AssistantConnections } from './assistant-connections';
 import { openFile } from '../shared/workspace';
 import type { FileEntry, OperationResult, WorkspaceState } from '../shared/types';
 
@@ -401,7 +402,20 @@ function registerIpc(): void {
     }
   });
 
-  handleTrusted('assistant:status', async (_event, forceRefresh = false, provider = 'chatgpt') => getAssistantStatus(requireAssistantProvider(provider), forceRefresh === true));
+  const connections = new AssistantConnections(path.join(app.getPath('userData'), 'assistant-connections.json'));
+  handleTrusted('assistant:status', async (_event, forceRefresh = false, value = 'chatgpt') => {
+    const provider = requireAssistantProvider(value);
+    const enabled = provider === 'local' || await connections.enabled(provider);
+    if (!enabled) return { kind: provider, connected: false, enabled: false, installed: Boolean(resolveAssistantBinary(provider as 'claude' | 'chatgpt')), label: provider, detail: 'Die Verbindung ist in Markdown Magic getrennt.' };
+    return { ...await getAssistantStatus(provider, forceRefresh === true), enabled: true };
+  });
+  handleTrusted('assistant:connection', async (_event, value: unknown, enabled: unknown): Promise<OperationResult> => {
+    try {
+      const provider = requireAssistantProvider(value);
+      if (provider === 'local' || typeof enabled !== 'boolean') throw new Error('Ungültige Verbindung.');
+      await connections.set(provider, enabled); return { ok: true };
+    } catch (error) { return failure(error); }
+  });
 
   handleTrusted('assistant:setup', async (_event, value: unknown): Promise<OperationResult> => {
     try {
@@ -422,7 +436,11 @@ function registerIpc(): void {
   });
 
   handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, title: string, history: AssistantChatMessage[] = [], scope?: 'passage', provider = 'local') => {
-    try { return { ok: true, ...await proposeAssistant(requireAssistantProvider(provider), prompt, markdown, title, history, scope) }; }
+    try {
+      const selected = requireAssistantProvider(provider);
+      if (selected !== 'local' && !await connections.enabled(selected)) throw new Error('Die Verbindung ist in Markdown Magic getrennt. Verbinde den Anbieter in den Einstellungen.');
+      return { ok: true, ...await proposeAssistant(selected, prompt, markdown, title, history, scope) };
+    }
     catch (error) { return failure(error); }
   });
   handleTrusted('files:list', async (_event, rootPath: string): Promise<OperationResult & { files?: FileEntry[] }> => {

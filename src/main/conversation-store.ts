@@ -19,6 +19,6 @@ export class ConversationStore {
   async relocate(source: string, destination: string) {
     const data = await this.read(source); const existing = await this.read(destination);
     const ids = new Set(existing.threads.map(t => t.id));
-    await this.write(destination, { version: 1, threads: [...existing.threads, ...data.threads.filter(t => !ids.has(t.id))] });
+    await this.write(destination, { ...data, ...existing, selectedThreadId: data.selectedThreadId ?? existing.selectedThreadId, threads: [...existing.threads, ...data.threads.filter(t => !ids.has(t.id))] });
   }
 }
