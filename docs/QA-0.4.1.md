@@ -24,3 +24,5 @@ Build command: npm run build, then CSC_IDENTITY_AUTO_DISCOVERY=false npx electro
 The installed 0.4.0 app was read before update: saved local draft, no running request and no unaccepted preview. Its existing content was not edited during inspection. An app/profile backup precedes replacement. Conversation additions are optional and remain compatible with existing storage; documents are not migrated.
 
 Exact commit, release, installed-bundle and website readbacks follow after delivery.
+
+The final native paragraph check led to the formatting-boundary follow-up in 0.4.2. Final delivery receipts are in [QA-0.4.2.md](QA-0.4.2.md).

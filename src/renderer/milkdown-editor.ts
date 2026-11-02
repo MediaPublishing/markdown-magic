@@ -102,8 +102,10 @@ export const createVisualMilkdownEditor: DocumentEditorFactory = async (root, in
       if (state.selection.empty) return undefined;
       const start = 'MMSTART' + crypto.randomUUID().replaceAll('-', '');
       const end = 'MMEND' + crypto.randomUUID().replaceAll('-', '');
-      const startMarks = state.doc.resolve(Math.min(state.selection.from + 1, state.selection.to)).marks();
-      const endMarks = state.doc.resolve(Math.max(state.selection.from, state.selection.to - 1)).marks();
+      const wholeTextBlock = state.selection.$from.sameParent(state.selection.$to)
+        && state.selection.$from.parentOffset === 0 && state.selection.$to.parentOffset === state.selection.$to.parent.content.size;
+      const startMarks = wholeTextBlock ? [] : state.doc.resolve(Math.min(state.selection.from + 1, state.selection.to)).marks();
+      const endMarks = wholeTextBlock ? [] : state.doc.resolve(Math.max(state.selection.from, state.selection.to - 1)).marks();
       const marked = state.tr.insert(state.selection.to, state.schema.text(end, endMarks)).insert(state.selection.from, state.schema.text(start, startMarks)).doc;
       const serialize = ctx.get(serializerCtx);
       const value = serialize(marked);

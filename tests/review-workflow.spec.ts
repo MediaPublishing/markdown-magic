@@ -48,6 +48,24 @@ test('mouse selection goes directly to the assistant without a keyboard shortcut
   } finally { await f.app.close(); }
 });
 
+test('a whole paragraph includes emphasis at its boundaries and can be replaced without orphaned marks', async () => {
+  const f = await setup('# Artikel\n\nDie **AInauten** erklären *AI verständlich.*\n\nDieser Absatz bleibt.\n');
+  try {
+    await f.app.evaluate(({ ipcMain }) => { ipcMain.removeHandler('assistant:propose'); ipcMain.handle('assistant:propose', (_e, _p, _markdown, _title, _history, scope) => ({ ok: true, reply: scope, proposal: { id: 'formatted-paragraph', mode: 'custom', language: 'de', summary: 'Absatz verbessern', markdown: 'AI einfach erklärt.', baseContentHash: '', createdAt: new Date().toISOString(), provider: 'local' } })); });
+    await f.page.locator('.ProseMirror:visible p').filter({ hasText: 'Die AInauten' }).click({ clickCount: 3 });
+    await f.page.locator('[data-toolbar-item="discuss-selection"]').click();
+    await expect(f.page.locator('.passage-context blockquote')).toHaveText('Die **AInauten** erklären *AI verständlich.*');
+    await f.page.locator('#assistant-prompt').fill('Verbessern'); await f.page.getByTestId('assistant-run').click();
+    await expect(f.page.locator('.chat-message.assistant').first()).toContainText('passage');
+    await f.page.locator('[data-action="assistant-apply"]').click();
+    await expect(f.page.locator('.ProseMirror:visible p').first()).toHaveText('AI einfach erklärt.');
+    await expect(f.page.locator('.ProseMirror:visible')).toContainText('Dieser Absatz bleibt.');
+    await f.page.locator('[data-action="assistant-undo"]').click();
+    await expect(f.page.locator('.ProseMirror:visible strong')).toHaveText('AInauten');
+    await expect(f.page.locator('.ProseMirror:visible em')).toHaveText('AI verständlich.');
+  } finally { await f.app.close(); }
+});
+
 test('generated proposals survive conversation changes, closing a document and restart', async () => {
   const f = await setup(); let app = f.app;
   try {
