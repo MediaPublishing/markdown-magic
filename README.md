@@ -4,7 +4,7 @@
 
 Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev/) · [Download 0.4.2 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.2/Markdown-Magic-0.4.2-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.4.2.md)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.4.3 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.4.3.md)
 
 ![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
@@ -43,11 +43,11 @@ Markiere einen Absatz und klicke auf das **Chatbot-Symbol** in der Auswahl-Werkz
 
 ## Installation und Updates
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.2/Markdown-Magic-0.4.2-arm64.dmg).
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg).
 2. `Markdown Magic.app` nach `Programme` ziehen.
-3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
+3. Markdown Magic aus „Programme“ öffnen und den ersten Start bestätigen.
 
-**Apple Silicon, macOS 13+.** Die Beta ist ad-hoc signiert, aber noch nicht von Apple notarisiert. Updates sind über das App-Menü und die [Release-Seite](https://github.com/MediaPublishing/markdown-magic/releases) erreichbar; sie werden manuell installiert.
+**Apple Silicon, macOS 13+.** Die Beta ist mit Apple Developer ID signiert und von Apple notarisiert. Updates sind über das App-Menü und die [Release-Seite](https://github.com/MediaPublishing/markdown-magic/releases) erreichbar; sie werden manuell installiert.
 
 Vorhandene Sitzungen werden mit einer Sicherung der alten Sitzungsdatei übernommen. Dokumentdateien werden nicht umsortiert. Entwürfe, Wiederherstellung und Historie liegen lokal im App-Datenordner. Ein vollständiges Systembackup bleibt sinnvoll: Die Wiederherstellung kann letzte Eingaben, die bei Stromausfall noch nicht auf die Festplatte geschrieben wurden, nicht garantieren.
 
@@ -70,7 +70,7 @@ Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test
 
 A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Download 0.4.2 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.2/Markdown-Magic-0.4.2-arm64.dmg) · [Release notes](docs/RELEASE-0.4.2.md)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.4.3 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg) · [Release notes](docs/RELEASE-0.4.3.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
@@ -107,9 +107,9 @@ Select a paragraph and click the **chatbot icon** in its selection toolbar, or p
 
 ## Install and update
 
-[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.2/Markdown-Magic-0.4.2-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg), then drag the app into Applications. Open Markdown Magic from Applications and confirm the first launch.
 
-**Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
+**Apple Silicon, macOS 13+.** This beta is signed with Apple Developer ID and notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
 
 Writing needs no account or internet connection. No telemetry or proprietary format. Choose Claude, ChatGPT or local tools in the assistant. Claude runs your installed official Claude Code application; ChatGPT uses Codex. Sign-in and credentials stay with the official program, and subscription limits apply. Only Send shares text and conversation. Changes appear as a preview with Apply and Undo. Offline document help uses rules, not a language model.
 
