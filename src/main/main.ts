@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from 'e
 import { createHash, randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { buildFileTree, isEditablePath, isPathInside, listMarkdownFiles, TEXT_EXTENSIONS, FileConflictError, writeFileAtomically } from './files';
 import { nativeText, setNativeLanguage } from './native-language';
@@ -11,8 +12,10 @@ import { registerDocumentIpc } from './document-ipc';
 import { documentQueue } from './serial-queue';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { RecoveryStore } from './recovery-store';
-import { createAssistantProposalId, createOfflineAssistantDraft, type AssistantChatMessage, type AssistantProposal } from '../shared/assistant';
-import { createCodexAssistantDraft, getCodexAssistantStatus, MAX_ASSISTANT_DOCUMENT_LENGTH } from './codex-assistant';
+import type { AssistantChatMessage } from '../shared/assistant';
+import { getAssistantStatus, proposeAssistant, requireAssistantProvider } from './assistant-service';
+import { resolveAssistantBinary } from './assistant-binary';
+import { AssistantConnections } from './assistant-connections';
 import { openFile } from '../shared/workspace';
 import type { FileEntry, OperationResult, WorkspaceState } from '../shared/types';
 
@@ -399,93 +402,47 @@ function registerIpc(): void {
     }
   });
 
-  handleTrusted('assistant:status', async (_event, forceRefresh = false) => getCodexAssistantStatus({ forceStatusRefresh: forceRefresh === true }));
-
-  handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, documentTitle: string, history: AssistantChatMessage[] = [], scope?: 'passage'): Promise<OperationResult & { reply?: string; proposal?: AssistantProposal }> => {
+  const connections = new AssistantConnections(path.join(app.getPath('userData'), 'assistant-connections.json'));
+  handleTrusted('assistant:status', async (_event, forceRefresh = false, value = 'chatgpt') => {
+    const provider = requireAssistantProvider(value);
+    const enabled = provider === 'local' || await connections.enabled(provider);
+    if (!enabled) return { kind: provider, connected: false, enabled: false, installed: Boolean(resolveAssistantBinary(provider as 'claude' | 'chatgpt')), label: provider, detail: 'Die Verbindung ist in Markdown Magic getrennt.' };
+    return { ...await getAssistantStatus(provider, forceRefresh === true), enabled: true };
+  });
+  handleTrusted('assistant:connection', async (_event, value: unknown, enabled: unknown): Promise<OperationResult> => {
     try {
-      if (scope !== undefined && scope !== 'passage') throw new Error('Ungültiger Assistentenbereich.');
-      if (typeof prompt !== 'string' || prompt.length > 2000) throw new Error('Ungültiger Assistentenauftrag.');
-      if (typeof markdown !== 'string' || markdown.length > MAX_ASSISTANT_DOCUMENT_LENGTH) throw new Error('Das Dokument ist für den Assistenten zu gross.');
-      if (typeof documentTitle !== 'string') throw new Error('Ungültiger Dokumenttitel.');
-      const safeHistory = Array.isArray(history) ? history.slice(-12).filter((message): message is AssistantChatMessage => (
-        (message?.role === 'user' || message?.role === 'assistant')
-        && typeof message.text === 'string'
-        && message.text.length <= 4000
-      )) : [];
-
-      const localDraft = createOfflineAssistantDraft(prompt, markdown, documentTitle);
-      const isDeterministicEdit = /einfüg|inhaltsverzeichnis|struktur normalis|insert|table of contents|normalize structure/i.test(prompt);
-      const provider = await getCodexAssistantStatus();
-      if (localDraft.ok && isDeterministicEdit && !provider.connected) {
-        const reply = localDraft.draft.language === 'en'
-          ? `${localDraft.draft.summary} Review the proposal before applying it.`
-          : `${localDraft.draft.summary} Prüfe den Vorschlag, bevor du ihn übernimmst.`;
-        return {
-          ok: true,
-          reply,
-          proposal: {
-            ...localDraft.draft,
-            id: createAssistantProposalId(),
-            baseContentHash: createHash('sha256').update(markdown, 'utf8').digest('hex'),
-            createdAt: new Date().toISOString(),
-            provider: 'local',
-          },
-        };
-      }
-      let chatGptFailed = false;
-      if (provider.connected) {
-        try {
-          const draft = await createCodexAssistantDraft(prompt, markdown, documentTitle, safeHistory, { scope });
-          const proposal = draft.action === 'propose_edit' && draft.summary && draft.markdown !== null ? {
-            id: createAssistantProposalId(),
-            mode: 'custom' as const,
-            language: /\b(english|englisch|translate|translation)\b/i.test(prompt) ? 'en' as const : 'de' as const,
-            summary: draft.summary,
-            markdown: draft.markdown,
-            baseContentHash: createHash('sha256').update(markdown, 'utf8').digest('hex'),
-            createdAt: new Date().toISOString(),
-            provider: 'chatgpt' as const,
-          } : undefined;
-          return {
-            ok: true,
-            reply: draft.reply,
-            ...(proposal ? { proposal } : {}),
-          };
-        } catch (error) {
-          if (!localDraft.ok) throw error;
-          chatGptFailed = true;
-        }
-      }
-
-      if (localDraft.ok) {
-        const localReply = localDraft.draft.language === 'en'
-          ? `${localDraft.draft.summary} Review the proposal before applying it.`
-          : `${localDraft.draft.summary} Prüfe den Vorschlag, bevor du ihn übernimmst.`;
-        const reply = chatGptFailed
-          ? localDraft.draft.language === 'en'
-            ? `ChatGPT was unavailable, so this proposal comes from the local assistant. ${localReply}`
-            : `ChatGPT war nicht verfügbar. Dieser Vorschlag stammt deshalb vom lokalen Assistenten. ${localReply}`
-          : localReply;
-        return {
-          ok: true,
-          reply,
-          proposal: {
-            ...localDraft.draft,
-            id: createAssistantProposalId(),
-            baseContentHash: createHash('sha256').update(markdown, 'utf8').digest('hex'),
-            createdAt: new Date().toISOString(),
-            provider: 'local',
-          },
-        };
-      }
-
-      if (provider.connected) throw new Error('ChatGPT ist gerade nicht verfügbar.');
-      throw new Error(localDraft.error);
-    } catch (error) {
-      return failure(error);
-    }
+      const provider = requireAssistantProvider(value);
+      if (provider === 'local' || typeof enabled !== 'boolean') throw new Error('Ungültige Verbindung.');
+      await connections.set(provider, enabled); return { ok: true };
+    } catch (error) { return failure(error); }
   });
 
+  handleTrusted('assistant:setup', async (_event, value: unknown): Promise<OperationResult> => {
+    try {
+      const provider = requireAssistantProvider(value);
+      if (provider === 'local') return { ok: true };
+      const binary = resolveAssistantBinary(provider);
+      if (!binary) {
+        await shell.openExternal(provider === 'claude' ? 'https://code.claude.com/docs/en/setup' : 'https://developers.openai.com/codex/quickstart/');
+      } else {
+        // The official CLI owns sign-in. No authentication output or credentials pass through the app.
+        const script = 'on run argv\n tell application "Terminal"\n activate\n do script ((quoted form of item 1 of argv) & item 2 of argv)\n end tell\nend run';
+        await new Promise<void>((resolve, reject) => {
+          execFile('/usr/bin/osascript', ['-e', script, binary, provider === 'claude' ? ' auth login' : ' login'], { timeout: 10_000 }, (error) => error ? reject(new Error('Die Anmeldung konnte nicht geöffnet werden. Öffne das offizielle Programm und melde dich dort an.')) : resolve());
+        });
+      }
+      return { ok: true };
+    } catch (error) { return failure(error); }
+  });
+
+  handleTrusted('assistant:propose', async (_event, prompt: string, markdown: string, title: string, history: AssistantChatMessage[] = [], scope?: 'passage', provider = 'local') => {
+    try {
+      const selected = requireAssistantProvider(provider);
+      if (selected !== 'local' && !await connections.enabled(selected)) throw new Error('Die Verbindung ist in Markdown Magic getrennt. Verbinde den Anbieter in den Einstellungen.');
+      return { ok: true, ...await proposeAssistant(selected, prompt, markdown, title, history, scope) };
+    }
+    catch (error) { return failure(error); }
+  });
   handleTrusted('files:list', async (_event, rootPath: string): Promise<OperationResult & { files?: FileEntry[] }> => {
     try {
       const safeRootPath = await requireDirectoryInsideAllowedRoots(rootPath);

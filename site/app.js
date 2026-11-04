@@ -1,192 +1,181 @@
 const copy = {
-  de: {
-    skipLink: 'Zum Inhalt',
-    homeLabel: 'Markdown Magic Startseite',
-    navLabel: 'Hauptnavigation',
-    languageLabel: 'Sprache',
-    navDrafts: 'Entwürfe',
-    navFiles: 'Dateien',
-    navDownload: 'Download',
-    headerDownload: 'Beta laden',
-    releaseLine: 'Version 0.3 Beta für macOS',
-    reviewKicker: 'Lektorat an deiner Textstelle',
-    reviewTitle: 'Ein Absatz. Ein Gedanke. Ein Gespräch.',
-    reviewText: 'Markiere eine Passage und halte eine lokale Notiz fest. Wenn du möchtest, besprichst du sie mit dem vorhandenen Assistenten. Einen Vorschlag prüfst du vor der Übernahme; der übrige Text bleibt erhalten.',
-    reviewCaption: 'Notizen und Gespräche bleiben lokal am Dokument, auch nach einem Neustart.',
-    reviewAlt: 'Markdown Magic mit ausgewählter Passage und lokaler Notiz',
-    heroTitle: 'Schreib zuerst.\nSpeicher später.',
-    heroLead: 'Öffne ein neues Dokument und leg direkt los. Markdown Magic hält deinen Text als lokalen Entwurf fest. Name und Speicherort wählst du, wenn es für dich passt.',
-    downloadMac: 'Für Mac herunterladen',
-    seeHow: 'So funktionieren Entwürfe',
-    compatibility: 'macOS 13+ · Beta · ad hoc signiert, nicht notarisiert',
-    heroCaption: 'Deine letzten Texte, Entwürfe und Orte bleiben in Reichweite.',
-    draftKicker: 'Der neue Schreibfluss',
-    draftTitle: 'Ein leerer Text braucht noch keinen Dateinamen.',
-    draft1Title: 'Anfangen',
-    draft1Text: '⌘N öffnet sofort ein neues Dokument und setzt den Cursor an die richtige Stelle.',
-    draft2Title: 'Weiterschreiben',
-    draft2Text: 'Markdown Magic sichert nichtleere Entwürfe lokal. Du kannst schließen und nach einem Neustart zurückkehren.',
-    draft3Title: 'Ablegen',
-    draft3Text: 'Wenn der Text einen Platz braucht, wählst du Name und Ordner im vertrauten macOS-Dialog. Abbrechen lässt den Entwurf bestehen.',
-    editorKicker: 'Visuelles Markdown',
-    editorTitle: 'Format sehen. In Markdown bleiben.',
-    editorText: 'Überschriften, Listen, Links und Hervorhebungen bearbeitest du direkt im formatierten Text. Für Suchen, Speichern, Drucken und neue Dokumente funktionieren die vertrauten Mac-Kürzel.',
-    editorCaption: 'Der Text bleibt im Mittelpunkt, Werkzeuge bleiben nah.',
-    filesKicker: 'Normale lokale Dateien',
-    filesTitle: 'Deine Ablage bleibt deine Ablage.',
-    fileIntro: 'Markdown Magic arbeitet mit den Markdown- und Textdateien auf deinem Mac. Bestehende Dateien bleiben an ihrem Ort.',
-    file1Title: 'Lesbar',
-    file1Text: 'Markdown bleibt ein normales Dateiformat, das andere Apps öffnen können.',
-    file2Title: 'Kontrollierbar',
-    file2Text: 'Die Quellansicht macht Frontmatter und besondere Markdown-Syntax direkt prüfbar.',
-    file3Title: 'Ohne Voraussetzung',
-    file3Text: 'Du brauchst weder ein Konto noch eine AI-Einrichtung, um zu schreiben.',
-    focusCaption: 'Hell, dunkel oder wie dein Mac. Die Darstellung folgt deinem System.',
-    newKicker: 'Neu in 0.3',
-    newTitle: 'Überarbeiten mit einem sicheren Rückweg.',
-    new1Title: 'Benannte Fassungen',
-    new1Text: 'Halte „Vor der Kürzung“ fest und vergleiche später die Änderungen. Automatische Sicherungen bleiben daneben erhalten.',
-    new2Title: 'Passagen besprechen',
-    new2Text: 'Markiere Text und öffne mit ⇧⌘K ein Gespräch zu genau dieser Stelle. Vorschläge werden erst nach deiner Übernahme angewendet.',
-    new3Title: 'Lokale Notizen',
-    new3Text: 'Kommentare brauchen weder Konto noch Internet. Gespräche bleiben im lokalen App-Datenordner, ohne Begleitdateien im geteilten Ordner.',
-    new4Title: 'Geprüfte Änderungen',
-    new4Text: 'Hat sich die besprochene Stelle geändert, wird ein veralteter Vorschlag nicht blind angewendet. Übernommene Änderungen lassen sich zurücknehmen.',
-    installKicker: 'Beta für Apple Silicon',
-    installTitle: 'Markdown Magic 0.3 ausprobieren.',
-    installText: 'Die Beta läuft auf Macs mit Apple Chip ab macOS 13. Sie ist ad hoc signiert und noch nicht von Apple notarisiert.',
-    downloadNow: 'DMG herunterladen',
-    allReleases: 'Versionshinweise ansehen',
-    install1Title: 'DMG öffnen',
-    install1Text: 'Lade die Datei und öffne das Image.',
-    install2Title: 'App verschieben',
-    install2Text: 'Ziehe Markdown Magic in den Ordner Programme.',
-    appleHelp: 'Apples Hinweise zum ersten Start',
-    install3Title: 'Ersten Start bestätigen',
-    install3Text: 'Falls macOS den Start blockiert: Prüfe die App unter Systemeinstellungen → Datenschutz & Sicherheit und bestätige dort „Dennoch öffnen“.',
-    footerText: 'Ein ruhiger Schreibplatz für normale Markdown-Dateien.',
-    footerReleases: 'Releases',
-    heroAlt: 'Markdown Magic mit Entwürfen, Dokumentnavigation und visuellem Editor',
-    editorAlt: 'Ein formatierter Markdown-Text in Markdown Magic',
-    focusAlt: 'Markdown Magic im ruhigen dunklen Schreibmodus',
-    title: 'Markdown Magic – sofort schreiben, später ablegen',
-    description: 'Markdown Magic ist ein ruhiger, visueller Markdown-Editor für lokale Dateien und automatische Entwürfe auf dem Mac.',
-    ogDescription: 'Sofort schreiben. Markdown Magic hält neue Texte als lokale Entwürfe fest, bis du sie benennst und ablegst.'
+  "de": {
+    "skip": "Zum Inhalt",
+    "navEditor": "Editor",
+    "navReview": "Überarbeiten",
+    "navQuestions": "Fragen",
+    "headerDownload": "Für Mac laden",
+    "eyebrow": "Visueller Markdown-Editor für Mac",
+    "heroTitle": "Dein Markdown-Editor.\nVom Entwurf zum fertigen Text.",
+    "heroLead": "Schreibe und formatiere Artikel, Notizen und Dokumente direkt im Text. Überarbeite mit Kommentaren und Fassungen. Gib deine Arbeit als Markdown oder PDF weiter.",
+    "download": "Für Mac herunterladen",
+    "seeEditor": "Editor ansehen",
+    "compatibility": "v0.4.3 Beta · Apple Silicon · macOS 13+",
+    "heroCaption": "Dein Text im Mittelpunkt. Formatierung und Dokumente direkt erreichbar.",
+    "flowWrite": "Schreiben & formatieren",
+    "flowReview": "Kommentieren & überarbeiten",
+    "flowShare": "Als Datei weitergeben",
+    "editorKicker": "Am Text arbeiten",
+    "editorTitle": "Die Formatierung sehen.\nDirekt darin schreiben.",
+    "editorText": "Setze Überschriften, formatiere Listen und ergänze Links oder Bilder im visuellen Editor. So siehst du beim Schreiben, wie dein Dokument aufgebaut ist.",
+    "editorPoint1": "Suchen, Ersetzen und Gliederung für längere Texte.",
+    "editorPoint2": "Quelltextansicht pro Dokument, wenn du Markdown direkt bearbeiten möchtest.",
+    "editorPoint3": "Seitenvorschau, Dokumentzoom und vertraute Mac-Kürzel.",
+    "editorCaption": "Von der einzelnen Notiz bis zum längeren Artikel.",
+    "reviewKicker": "Gezielt überarbeiten",
+    "reviewTitle": "Die richtige Stelle.\nDer nächste gute Satz.",
+    "reviewText": "Markiere eine Passage und lass sie kürzen, umformulieren oder übersetzen. Wähle Claude oder ChatGPT mit deinem eigenen Abo. Du prüfst den Vorschlag und entscheidest, was in deinen Text kommt.",
+    "reviewCaption": "Absatz markieren, das Chatbot-Symbol anklicken und mit genau dieser Stelle als Kontext arbeiten.",
+    "reviewStep1": "Eine Notiz für später.",
+    "reviewStep1Text": "„Hier fehlt ein Beispiel.“ Kommentare bleiben lokal am Dokument und sind nach einem Neustart wieder da.",
+    "reviewStep2": "Ein Vorschlag zum Prüfen.",
+    "reviewStep2Text": "Das Chatbot-Symbol öffnet den Chat mit deiner Auswahl als sichtbarem Kontext. Erst „Übernehmen“ ändert diese Stelle im Text.",
+    "reviewStep3": "Ein klarer Rückweg.",
+    "reviewStep3Text": "Vorschläge bleiben beim Gespräch gespeichert, auch nach dem Schließen und Wiederöffnen. Übernommene Änderungen kannst du zurücknehmen.",
+    "versionsKicker": "Fassungen behalten",
+    "versionsTitle": "Vor der Kürzung.\nNach der Überarbeitung.\nBeides bleibt erreichbar.",
+    "versionsText": "Gib wichtigen Arbeitsständen einen Namen. Vergleiche eine Fassung mit dem aktuellen Text, öffne sie als Kopie oder stelle sie wieder her. Automatische Sicherungen bleiben daneben erhalten.",
+    "versionsNote": "Benannte Fassungen bleiben zusätzlich zu den letzten 50 automatischen Sicherungen gespeichert.",
+    "versionsCaption": "Arbeitsstände festhalten, bevor du etwas Größeres veränderst.",
+    "filesKicker": "Deine Dateien auf deinem Mac",
+    "filesTitle": "Fertig geschrieben.\nBereit zum Weitergeben.",
+    "filesText": "Markdown bleibt eine normale Textdatei, die du in anderen Apps öffnen kannst. Für die Weitergabe kopierst du Markdown oder formatierten Text, exportierst ein PDF oder druckst dein Dokument.",
+    "localTitle": "Lokal arbeiten",
+    "localText": "Bestehende Dateien bleiben an ihrem Ort. Schreiben und lokale Notizen brauchen weder Konto noch Internet.",
+    "draftTitle": "Sofort anfangen",
+    "draftText": "Neue Dokumente werden als lokale Entwürfe gesichert. Name und Ordner wählst du später im Mac-Sichern-Dialog.",
+    "findTitle": "Wiederfinden",
+    "findText": "Zuletzt, Entwürfe, Favoriten und Orte halten deine Dokumente griffbereit.",
+    "faqKicker": "Vor dem Download",
+    "faqTitle": "Was du wissen möchtest.",
+    "faq1": "Muss ich Markdown können?",
+    "faq1Text": "Du kannst Überschriften, Listen und andere Formatierungen im visuellen Editor bearbeiten. Für besondere Markdown-Strukturen gibt es eine Quelltextansicht. Nicht unterstützte Inhalte öffnet die App dort, damit sie erhalten bleiben.",
+    "faq2": "Brauche ich einen AI-Zugang?",
+    "faq2Text": "Für Schreiben, lokale Kommentare und Fassungen nicht. Für Online-Vorschläge wählst du Claude oder ChatGPT. Dazu muss Claude Code beziehungsweise Codex auf deinem Mac installiert und mit deinem Abo angemeldet sein. Die Limits deines Abos gelten weiter. Erst „Senden“ überträgt den Text und das Gespräch; bei Passagen nur den ausgewählten Ausschnitt. Die Anmeldung bleibt im offiziellen Programm.",
+    "faq3": "Was passiert mit Kommentaren, wenn ich eine Datei teile?",
+    "faq3Text": "Notizen, Gespräche und Fassungen liegen im lokalen App-Datenordner. Die Markdown-Datei enthält nur deinen Text. Beim Weitergeben einer Datei oder Erstellen einer Dokumentkopie werden Gespräche nicht automatisch mitgegeben.",
+    "faq4": "Auf welchen Macs läuft die Beta?",
+    "faq4Text": "Markdown Magic 0.4.3 ist für Apple Silicon und macOS 13 oder neuer verfügbar. Die Beta ist mit Apple Developer ID signiert und von Apple notarisiert. Updates installierst du derzeit manuell.",
+    "downloadKicker": "Markdown Magic für Mac",
+    "downloadTitle": "Dein nächster Text\nkann hier anfangen.",
+    "releaseNotes": "Versionshinweise",
+    "installTitle": "In drei Schritten startklar.",
+    "install1": "DMG herunterladen und öffnen.",
+    "install2": "Markdown Magic in „Programme“ ziehen.",
+    "install3": "Markdown Magic aus „Programme“ öffnen und den ersten Start bestätigen.",
+    "appleHelp": "Apples Hinweise zum ersten Start",
+    "footer": "Visuell schreiben. Als Markdown weiterarbeiten.",
+    "source": "Quellcode auf GitHub",
+    "heroAlt": "Markdown Magic mit einem formatierten Artikel, Werkzeugleiste und lokalen Entwürfen",
+    "editorAlt": "Markdown Magic mit formatiertem Dokument in der Seitenvorschau",
+    "reviewAlt": "Ausgewählte Passage und zugehöriger Kommentar im Seitenpanel",
+    "versionsAlt": "Ansicht zum Benennen und Öffnen von Dokumentfassungen",
+    "title": "Markdown Magic – vom Entwurf zum fertigen Text",
+    "description": "Markdown schreiben, visuell formatieren und mit Kommentaren und Fassungen überarbeiten. Markdown Magic für Mac. Lokale Dateien, Markdown- und PDF-Ausgabe.",
+    "ogTitle": "Markdown Magic – dein Markdown-Editor für Mac",
+    "ogDescription": "Schreibe und formatiere direkt im Text. Überarbeite mit Kommentaren und Fassungen. Gib deine Arbeit als Markdown oder PDF weiter."
   },
-  en: {
-    skipLink: 'Skip to content',
-    homeLabel: 'Markdown Magic home',
-    navLabel: 'Main navigation',
-    languageLabel: 'Language',
-    navDrafts: 'Drafts',
-    navFiles: 'Files',
-    navDownload: 'Download',
-    headerDownload: 'Download beta',
-    releaseLine: 'Version 0.3 beta for macOS',
-    reviewKicker: 'Review a specific passage',
-    reviewTitle: 'One paragraph. One thought. One conversation.',
-    reviewText: 'Select a passage and keep a local note. Discuss it with the existing assistant when you choose. Review a suggestion before applying it; the rest of your writing stays intact.',
-    reviewCaption: 'Notes and conversations stay locally with your document, including after a restart.',
-    reviewAlt: 'Markdown Magic with a selected passage and a local note',
-    heroTitle: 'Write first.\nSave it later.',
-    heroLead: 'Open a new document and start writing. Markdown Magic keeps your text as a local draft. Choose a name and location when you are ready.',
-    downloadMac: 'Download for Mac',
-    seeHow: 'See how drafts work',
-    compatibility: 'macOS 13+ · Beta · ad hoc signed, not notarized',
-    heroCaption: 'Recent work, drafts, and locations stay within reach.',
-    draftKicker: 'The new writing flow',
-    draftTitle: 'A blank page does not need a filename yet.',
-    draft1Title: 'Start',
-    draft1Text: '⌘N opens a new document immediately and puts the cursor where it belongs.',
-    draft2Title: 'Keep writing',
-    draft2Text: 'Markdown Magic keeps non-empty drafts locally. Close the app and return after a restart.',
-    draft3Title: 'File it',
-    draft3Text: 'When the text needs a home, choose its name and folder in the familiar macOS save sheet. Canceling keeps the draft.',
-    editorKicker: 'Visual Markdown',
-    editorTitle: 'See the formatting. Keep the Markdown.',
-    editorText: 'Edit headings, lists, links, and emphasis directly in formatted text. Familiar Mac shortcuts work for finding, saving, printing, and creating documents.',
-    editorCaption: 'Your text stays central while the tools remain close.',
-    filesKicker: 'Normal local files',
-    filesTitle: 'Your filing system stays yours.',
-    fileIntro: 'Markdown Magic works with the Markdown and text files on your Mac. Existing files stay where you put them.',
-    file1Title: 'Readable',
-    file1Text: 'Markdown remains a normal file format that other apps can open.',
-    file2Title: 'Inspectable',
-    file2Text: 'Source view makes frontmatter and special Markdown syntax directly inspectable.',
-    file3Title: 'No prerequisites',
-    file3Text: 'You do not need an account or an AI setup to write.',
-    focusCaption: 'Light, dark, or matched to your Mac. Appearance follows your system.',
-    newKicker: 'New in 0.3',
-    newTitle: 'Revise with a way back.',
-    new1Title: 'Named versions',
-    new1Text: 'Capture “Before shortening” and compare changes later. Automatic backups remain alongside your milestones.',
-    new2Title: 'Discuss passages',
-    new2Text: 'Select text and press ⇧⌘K to discuss that passage. Suggestions are applied only after you accept them.',
-    new3Title: 'Local notes',
-    new3Text: 'Comments need no account or internet. Conversations stay in local app data without creating sidecar files in a shared folder.',
-    new4Title: 'Checked changes',
-    new4Text: 'If the target passage changes, an outdated proposal is not applied blindly. Accepted changes can be undone.',
-    installKicker: 'Beta for Apple Silicon',
-    installTitle: 'Try Markdown Magic 0.3.',
-    installText: 'The beta runs on Apple silicon Macs with macOS 13 or later. It is ad hoc signed and not yet notarized by Apple.',
-    downloadNow: 'Download the DMG',
-    allReleases: 'View release notes',
-    install1Title: 'Open the DMG',
-    install1Text: 'Download the file and open the disk image.',
-    install2Title: 'Move the app',
-    install2Text: 'Drag Markdown Magic into Applications.',
-    appleHelp: 'Apple’s guidance for the first launch',
-    install3Title: 'Confirm the first launch',
-    install3Text: 'If macOS blocks the first launch, review the app in System Settings → Privacy & Security, then choose “Open Anyway”.',
-    footerText: 'A calm writing space for ordinary Markdown files.',
-    footerReleases: 'Releases',
-    heroAlt: 'Markdown Magic with drafts, document navigation, and a visual editor',
-    editorAlt: 'Formatted Markdown text in Markdown Magic',
-    focusAlt: 'Markdown Magic in a calm dark writing mode',
-    title: 'Markdown Magic – write first, save it later',
-    description: 'Markdown Magic is a calm visual Markdown editor for local files and automatic drafts on Mac.',
-    ogDescription: 'Start writing immediately. Markdown Magic keeps new text as a local draft until you name and file it.'
+  "en": {
+    "skip": "Skip to content",
+    "navEditor": "Editor",
+    "navReview": "Revising",
+    "navQuestions": "Questions",
+    "headerDownload": "Get it for Mac",
+    "eyebrow": "Visual Markdown editor for Mac",
+    "heroTitle": "Your Markdown editor.\nFrom first draft to finished text.",
+    "heroLead": "Write and format articles, notes and documents directly in the text. Revise with comments and saved versions. Share your work as Markdown or PDF.",
+    "download": "Download for Mac",
+    "seeEditor": "See the editor",
+    "compatibility": "v0.4.3 Beta · Apple Silicon · macOS 13+",
+    "heroCaption": "Your writing takes centre stage. Formatting and documents stay within reach.",
+    "flowWrite": "Write & format",
+    "flowReview": "Comment & revise",
+    "flowShare": "Share as a file",
+    "editorKicker": "Work on your writing",
+    "editorTitle": "See the formatting.\nWrite directly in it.",
+    "editorText": "Add headings, format lists, and insert links or images in the visual editor. See how your document takes shape as you write.",
+    "editorPoint1": "Find, replace and outline tools for longer writing.",
+    "editorPoint2": "Switch each document to source view when you want to edit Markdown directly.",
+    "editorPoint3": "Page preview, document zoom and familiar Mac shortcuts.",
+    "editorCaption": "For a quick note or a longer article.",
+    "reviewKicker": "Revise a specific passage",
+    "reviewTitle": "The right passage.\nThe next good sentence.",
+    "reviewText": "Select a passage to shorten, rephrase or translate. Choose Claude or ChatGPT with your own subscription. Review the suggestion and decide what goes into your text.",
+    "reviewCaption": "Select a paragraph, click the chatbot icon and work with that exact passage as context.",
+    "reviewStep1": "A note for later.",
+    "reviewStep1Text": "“This needs an example.” Comments stay locally with your document and are there after a restart.",
+    "reviewStep2": "A suggestion to review.",
+    "reviewStep2Text": "The chatbot icon opens the chat with your selection as visible context. Apply changes only that passage in your document.",
+    "reviewStep3": "A way back.",
+    "reviewStep3Text": "Suggestions stay with the conversation when you close and reopen it. Accepted changes can be undone.",
+    "versionsKicker": "Keep important versions",
+    "versionsTitle": "Before shortening.\nAfter revising.\nBoth remain within reach.",
+    "versionsText": "Give important drafts a name. Compare a saved version with your current text, open it as a copy or restore it. Automatic backups remain alongside your milestones.",
+    "versionsNote": "Named versions are retained in addition to the latest 50 automatic backups.",
+    "versionsCaption": "Capture a milestone before making a bigger change.",
+    "filesKicker": "Your files on your Mac",
+    "filesTitle": "Finished writing.\nReady to share.",
+    "filesText": "Markdown stays a normal text file you can open in other apps. Copy Markdown or formatted text, export a PDF, or print your document.",
+    "localTitle": "Work locally",
+    "localText": "Existing files stay where you put them. Writing and local notes need no account or internet.",
+    "draftTitle": "Start immediately",
+    "draftText": "New documents are saved as local drafts. Choose a name and folder later in the Mac save dialog.",
+    "findTitle": "Find your work",
+    "findText": "Recent, Drafts, Favorites and Places keep your documents close.",
+    "faqKicker": "Before you download",
+    "faqTitle": "A few useful answers.",
+    "faq1": "Do I need to know Markdown?",
+    "faq1Text": "Edit headings, lists and other formatting in the visual editor. Source view is available for special Markdown structures. Unsupported content opens there so it can be preserved.",
+    "faq2": "Do I need an AI account?",
+    "faq2Text": "Not for writing, local comments or saved versions. Choose Claude or ChatGPT for online suggestions. Install Claude Code or Codex on your Mac and sign in there with your subscription. Your plan limits still apply. Only Send shares the text and conversation; passage requests send only the selection. Sign-in stays in the official program.",
+    "faq3": "What happens to comments when I share a file?",
+    "faq3Text": "Notes, conversations and versions live in local app data. The Markdown file contains only your writing. Conversations are not automatically included when sharing a file or creating a document copy.",
+    "faq4": "Which Macs can run the beta?",
+    "faq4Text": "Markdown Magic 0.4.3 supports Apple silicon and macOS 13 or later. The beta is signed with Apple Developer ID and notarized by Apple. Updates are currently installed manually.",
+    "downloadKicker": "Markdown Magic for Mac",
+    "downloadTitle": "Your next piece of writing\ncan start here.",
+    "releaseNotes": "Release notes",
+    "installTitle": "Three steps to get started.",
+    "install1": "Download and open the DMG.",
+    "install2": "Drag Markdown Magic into Applications.",
+    "install3": "Open Markdown Magic from Applications and confirm the first launch.",
+    "appleHelp": "Apple’s guidance for the first launch",
+    "footer": "Write visually. Keep working in Markdown.",
+    "source": "Source code on GitHub",
+    "heroAlt": "Markdown Magic showing a formatted article, formatting toolbar and local drafts",
+    "editorAlt": "Markdown Magic showing a formatted document in page preview",
+    "reviewAlt": "A selected passage and its comment in the side panel",
+    "versionsAlt": "The interface for naming and opening document versions",
+    "title": "Markdown Magic – from first draft to finished text",
+    "description": "Write Markdown, format visually and revise with comments and saved versions. Markdown Magic for Mac. Local files, Markdown and PDF output.",
+    "ogTitle": "Markdown Magic – your Markdown editor for Mac",
+    "ogDescription": "Write and format directly in your text. Revise with comments and versions. Share your work as Markdown or PDF."
   }
 };
 
 function setLanguage(language) {
-  const selected = copy[language] ? language : 'de';
-  const selectedCopy = copy[selected];
+  const selected = language === 'en' ? 'en' : 'de';
+  const text = copy[selected];
   document.documentElement.lang = selected;
-
-  document.querySelectorAll('[data-copy]').forEach((element) => {
-    const value = selectedCopy[element.dataset.copy];
-    if (!value) return;
-    if (element.dataset.copy === 'heroTitle') {
-      const [firstLine, secondLine] = value.split('\n');
-      element.replaceChildren(document.createTextNode(firstLine), document.createElement('br'), document.createTextNode(secondLine));
-      return;
-    }
-    element.textContent = value;
+  document.querySelector('.language-switch').setAttribute('aria-label', selected === 'en' ? 'Language' : 'Sprache');
+  document.querySelectorAll('[data-copy]').forEach(element => {
+    const value = text[element.dataset.copy];
+    if (value === undefined) return;
+    const lines = value.split('\n');
+    element.replaceChildren(...lines.flatMap((line, index) => index ? [document.createElement('br'), document.createTextNode(line)] : [document.createTextNode(line)]));
   });
-
-  document.querySelectorAll('[data-alt]').forEach((element) => {
-    const value = selectedCopy[element.dataset.alt];
-    if (value) element.alt = value;
-  });
-
-  document.querySelectorAll('[data-copy-aria]').forEach((element) => {
-    const value = selectedCopy[element.dataset.copyAria];
-    if (value) element.setAttribute('aria-label', value);
-  });
-
-  document.querySelectorAll('.language-switch a').forEach((link) => {
-    if (link.getAttribute('hreflang') === selected) link.setAttribute('aria-current', 'page');
+  document.querySelectorAll('[data-alt]').forEach(element => { element.alt = text[element.dataset.alt]; });
+  document.querySelectorAll('.language-switch a').forEach(link => {
+    if (link.hreflang === selected) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
-
-  document.title = selectedCopy.title;
-  document.querySelector('meta[name="description"]').content = selectedCopy.description;
-  document.querySelector('meta[property="og:description"]').content = selectedCopy.ogDescription;
-  const canonicalUrl = selected === 'en' ? 'https://markdown-magic.pages.dev/en/' : 'https://markdown-magic.pages.dev/';
-  document.querySelector('meta[property="og:url"]').content = canonicalUrl;
-  document.querySelector('link[rel="canonical"]').href = canonicalUrl;
+  document.title = text.title;
+  document.querySelector('meta[name="description"]').content = text.description;
+  document.querySelector('meta[property="og:title"]').content = text.ogTitle;
+  document.querySelector('meta[property="og:description"]').content = text.ogDescription;
+  const url = 'https://markdown-magic.pages.dev/' + (selected === 'en' ? 'en/' : '');
+  document.querySelector('link[rel="canonical"]').href = url;
+  document.querySelector('meta[property="og:url"]').content = url;
 }
 
-const pathLanguage = location.pathname === '/en' || location.pathname.startsWith('/en/') ? 'en' : 'de';
-setLanguage(pathLanguage);
+setLanguage(location.pathname === '/en' || location.pathname.startsWith('/en/') ? 'en' : 'de');

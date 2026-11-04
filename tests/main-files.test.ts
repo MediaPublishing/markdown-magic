@@ -247,6 +247,8 @@ describe('Preload bridge', () => {
       'createFile',
       'createSampleProject',
       'getAssistantStatus',
+      'setupAssistant',
+      'setAssistantConnection',
       'getState',
       'listHistory',
       'listMarkdown',
@@ -278,11 +280,17 @@ describe('Preload bridge', () => {
     bridge.statFiles(['/workspace/draft.md']);
     expect(electron.invoke).toHaveBeenCalledWith('files:stat-many', ['/workspace/draft.md']);
     bridge.proposeAssistant('summary', '# Draft', 'draft.md');
-    expect(electron.invoke).toHaveBeenCalledWith('assistant:propose', 'summary', '# Draft', 'draft.md', [], undefined);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:propose', 'summary', '# Draft', 'draft.md', [], undefined, 'local');
     bridge.getAssistantStatus();
-    expect(electron.invoke).toHaveBeenCalledWith('assistant:status', false);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:status', false, 'chatgpt');
     bridge.getAssistantStatus(true);
-    expect(electron.invoke).toHaveBeenCalledWith('assistant:status', true);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:status', true, 'chatgpt');
+    bridge.getAssistantStatus(true, 'claude');
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:status', true, 'claude');
+    bridge.setupAssistant('claude');
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:setup', 'claude');
+    bridge.setAssistantConnection('claude', false);
+    expect(electron.invoke).toHaveBeenCalledWith('assistant:connection', 'claude', false);
     bridge.recordAssistantCheckpoint('/workspace/draft.md', '# Draft', 123);
     expect(electron.invoke).toHaveBeenCalledWith('history:record-assistant', '/workspace/draft.md', '# Draft', 123);
     const onMenuAction = vi.fn();

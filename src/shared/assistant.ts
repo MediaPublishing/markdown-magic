@@ -2,6 +2,16 @@ export type AssistantMode = 'summary' | 'table-of-contents' | 'normalize' | 'cus
 
 export type AssistantLanguage = 'de' | 'en';
 
+export type AssistantProvider = 'chatgpt' | 'claude' | 'local';
+export type AssistantProviderStatus = {
+  kind: AssistantProvider | 'offline';
+  connected: boolean;
+  installed?: boolean;
+  enabled?: boolean;
+  label: string;
+  detail: string;
+};
+
 export type AssistantDraft = {
   mode: AssistantMode;
   language: AssistantLanguage;
@@ -17,12 +27,13 @@ export type AssistantProposal = {
   markdown: string;
   baseContentHash: string;
   createdAt: string;
-  provider: 'chatgpt' | 'local';
+  provider: AssistantProvider;
 };
 
 export type AssistantChatMessage = {
   role: 'user' | 'assistant';
   text: string;
+  provider?: AssistantProvider;
 };
 
 export type AssistantChatResponse = {

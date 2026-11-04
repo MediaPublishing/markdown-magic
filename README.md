@@ -4,7 +4,7 @@
 
 Ein visueller Markdown-Editor für den Mac: Öffnen, schreiben, wiederfinden. Neue Dokumente werden automatisch als lokale Entwürfe gesichert. Name und Speicherort wählst du später.
 
-[Website](https://markdown-magic.pages.dev/) · [Download 0.3.0 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.3.0.md)
+[Website](https://markdown-magic.pages.dev/) · [Download 0.4.3 für Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg) · [Versionshinweise](docs/RELEASE-0.4.3.md)
 
 ![Markdown Magic: lokale Entwürfe und visueller Editor](docs/screenshots/workspace-light.png)
 
@@ -22,7 +22,7 @@ Wenn eine Datei außerhalb der App geändert wurde und du sie mit eigenen ungesp
 
 Über den Dokumenttitel öffnest du **Fassungen**. Benenne einen Arbeitsstand, etwa „Vor der Kürzung“, und vergleiche später die Änderungen.
 
-Markiere eine Passage und drücke **⇧⌘K**. **Nur notieren** speichert einen lokalen Kommentar. **Senden** bespricht die Stelle mit dem vorhandenen Assistenten; **Übernehmen** wendet einen geprüften Vorschlag an. Gespräche bleiben nach einem Neustart erhalten. Erledigte Kommentare lassen sich wieder öffnen. Notizen liegen im lokalen App-Datenordner; Dokumentkopien übernehmen sie nicht automatisch.
+Markiere einen Absatz und klicke auf das **Chatbot-Symbol** in der Auswahl-Werkzeugleiste, alternativ **⇧⌘K**. Der Chat zeigt genau diese Stelle als Kontext. **Nur notieren** speichert einen lokalen Kommentar. **Senden** bespricht die Auswahl; **Übernehmen** ersetzt nur diese Passage. Gespräche und offene Vorschläge bleiben beim Schließen und nach einem Neustart erhalten. Erledigte Kommentare lassen sich wieder öffnen. Notizen liegen im lokalen App-Datenordner; Dokumentkopien übernehmen sie nicht automatisch. Unter **Einstellungen → Verbindungen verwalten** verbindest oder trennst du Claude und ChatGPT für diese App.
 
 ## Im Alltag
 
@@ -43,17 +43,17 @@ Markiere eine Passage und drücke **⇧⌘K**. **Nur notieren** speichert einen 
 
 ## Installation und Updates
 
-1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg).
+1. [DMG herunterladen](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg).
 2. `Markdown Magic.app` nach `Programme` ziehen.
-3. Falls macOS die Beta blockiert, den Start in den Systemeinstellungen unter Datenschutz & Sicherheit bestätigen.
+3. Markdown Magic aus „Programme“ öffnen und den ersten Start bestätigen.
 
-**Apple Silicon, macOS 13+.** Die Beta ist ad-hoc signiert, aber noch nicht von Apple notarisiert. Updates sind über das App-Menü und die [Release-Seite](https://github.com/MediaPublishing/markdown-magic/releases) erreichbar; sie werden manuell installiert.
+**Apple Silicon, macOS 13+.** Die Beta ist mit Apple Developer ID signiert und von Apple notarisiert. Updates sind über das App-Menü und die [Release-Seite](https://github.com/MediaPublishing/markdown-magic/releases) erreichbar; sie werden manuell installiert.
 
 Vorhandene Sitzungen werden mit einer Sicherung der alten Sitzungsdatei übernommen. Dokumentdateien werden nicht umsortiert. Entwürfe, Wiederherstellung und Historie liegen lokal im App-Datenordner. Ein vollständiges Systembackup bleibt sinnvoll: Die Wiederherstellung kann letzte Eingaben, die bei Stromausfall noch nicht auf die Festplatte geschrieben wurden, nicht garantieren.
 
 ## Datenschutz
 
-Schreiben benötigt weder Konto noch Internet. Keine Telemetrie, kein proprietäres Dokumentformat. Der optionale Online-Assistent verwendet den vorhandenen lokalen Codex-Zugang und überträgt Dokumentinhalt erst nach einer bewussten Anfrage. Die Offline-Dokumenthilfe ist regelbasiert.
+Schreiben benötigt weder Konto noch Internet. Keine Telemetrie, kein proprietäres Dokumentformat. Wähle Claude, ChatGPT oder lokale Werkzeuge im Assistenten. Claude nutzt dein Abo über die offizielle lokale Claude-Code-Anwendung, ChatGPT über Codex. Anmeldung und Zugangsdaten bleiben beim offiziellen Programm; die Limits deines Abos gelten weiter. Erst Senden überträgt den Text samt Gespräch. Änderungen erscheinen als Vorschau mit Übernehmen und Rückgängig. Die Offline-Dokumenthilfe ist regelbasiert.
 
 ## Entwicklung
 
@@ -70,7 +70,7 @@ Die Tests verwenden eigene temporäre Profile und Testdokumente. Für einen Test
 
 A visual Markdown editor for Mac: open, write, find it again. New documents are automatically saved as local drafts. Choose their names and locations later.
 
-[Website](https://markdown-magic.pages.dev/en/) · [Download 0.3.0 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg) · [Release notes](docs/RELEASE-0.3.0.md)
+[Website](https://markdown-magic.pages.dev/en/) · [Download 0.4.3 for Apple Silicon](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg) · [Release notes](docs/RELEASE-0.4.3.md)
 
 ![Markdown Magic in dark focus mode](docs/screenshots/focus-dark.png)
 
@@ -88,7 +88,7 @@ If a file changed outside the app and you close it with unsaved edits, you can e
 
 Open **Versions** from the document title. Name a milestone such as “Before shortening” and compare later changes.
 
-Select a passage and press **⇧⌘K**. **Keep as note** stores a local comment. **Send** discusses that passage with the existing assistant; **Apply** accepts a checked proposal. Conversations survive restarts, and resolved comments can be reopened. Notes stay in local app data; document copies do not inherit them automatically.
+Select a paragraph and click the **chatbot icon** in its selection toolbar, or press **⇧⌘K**. The chat shows that exact passage as context. **Keep as note** stores a local comment. **Send** discusses the selection; **Apply** replaces only that passage. Conversations and pending suggestions survive closing and restarting. Resolved comments can be reopened. Notes stay in local app data; document copies do not inherit them automatically. Use **Settings → Manage connections** to connect or disconnect Claude and ChatGPT for this app.
 
 ## Everyday tools
 
@@ -107,11 +107,11 @@ Select a passage and press **⇧⌘K**. **Keep as note** stores a local comment.
 
 ## Install and update
 
-[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.3.0/Markdown-Magic-0.3.0-arm64.dmg), then drag the app into Applications. If macOS blocks the beta, confirm it in System Settings → Privacy & Security.
+[Download the DMG](https://github.com/MediaPublishing/markdown-magic/releases/download/v0.4.3/Markdown-Magic-0.4.3-arm64.dmg), then drag the app into Applications. Open Markdown Magic from Applications and confirm the first launch.
 
-**Apple Silicon, macOS 13+.** This beta is ad-hoc signed and not yet notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
+**Apple Silicon, macOS 13+.** This beta is signed with Apple Developer ID and notarized by Apple. Updates are available through the app menu and [releases](https://github.com/MediaPublishing/markdown-magic/releases) and are installed manually. Existing sessions are migrated with a backup; document files stay where they are. Recovery protects local writes but cannot guarantee final keystrokes not yet written to disk during a power failure.
 
-Writing needs no account or internet connection. No telemetry or proprietary format. The optional online assistant uses the existing local Codex sign-in and sends document content only after an explicit request. Offline document help uses rules, not a language model.
+Writing needs no account or internet connection. No telemetry or proprietary format. Choose Claude, ChatGPT or local tools in the assistant. Claude runs your installed official Claude Code application; ChatGPT uses Codex. Sign-in and credentials stay with the official program, and subscription limits apply. Only Send shares text and conversation. Changes appear as a preview with Apply and Undo. Offline document help uses rules, not a language model.
 
 ## License
 

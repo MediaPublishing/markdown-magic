@@ -9,5 +9,6 @@ test-results/
 .env
 .env.*
 receipts/
+docs/ce-code-review/
 private/
 site-preview/
