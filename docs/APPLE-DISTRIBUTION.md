@@ -2,7 +2,13 @@
 
 Requested by Reto on 2026-11-02: sign Markdown Magic with the existing Apple Developer account, notarize it, and publish the verified download. Direct distribution through GitHub and the existing website remains the delivery channel; this request does not create an App Store listing.
 
-## Current state
+## Completed distribution
+
+Version **0.4.3** is Apple-notarized, stapled, Gatekeeper-accepted and published at https://github.com/MediaPublishing/markdown-magic/releases/tag/v0.4.3. The app is installed and reopened with both original tabs. Both website languages are deployed and verified. Final delivery and rollback evidence: [QA-0.4.3.md](QA-0.4.3.md). No release steps remain pending for this version.
+
+The historical pending states below are superseded by this completion receipt.
+
+## Preparation history
 
 - Installed and published version: 0.4.2, ad hoc signed. Its public DMG SHA-256 still matches `6b69638e847cc0719750cc3937f8e530efabe797d3a4d9e126b5159463ed7c84`.
 - On resuming, the existing Apple session is signed in to Reto Stuber Global Headquarters LLC, team `F7ZC4PZ39V`. The portal lists a Developer ID Application certificate expiring 2027-12-02. The local keychain now has its matching valid identity, fingerprint `2CC5079EEA6E4197326C7564E07C41EDFACFB53E`. No new certificate or permission was created by this release task.
